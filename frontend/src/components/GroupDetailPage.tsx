@@ -7,6 +7,7 @@ import { ContributionForm } from './ContributionForm'
 import { MemberList } from './MemberList'
 import { TransactionHistory } from './TransactionHistory'
 import InviteModal from './InviteModal'
+import { useGroupDetail, useGroupMembers } from '../hooks/useContractData'
 
 type TabKey = 'overview' | 'members' | 'history' | 'settings'
 
@@ -19,15 +20,26 @@ interface GroupDetailPageProps {
 
 export const GroupDetailPage: React.FC<GroupDetailPageProps> = ({
   groupId,
-  groupName = 'Market Women Ajo',
+  groupName: propGroupName,
   onShareLink,
   onCopyLink,
 }) => {
   const [activeTab, setActiveTab] = useState<TabKey>('overview')
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false)
 
-  // TODO: Fetch group details from smart contract
-  // TODO: Fetch member list and transaction history
+  // Fetch group details from smart contract
+  const { data: groupDetail, isLoading: isLoadingDetail } = useGroupDetail(groupId)
+  const { data: members, isLoading: isLoadingMembers } = useGroupMembers(groupId)
+
+  // Use fetched data or fallback to props
+  const groupName = groupDetail?.name || propGroupName || 'Loading...'
+  const groupStatus = groupDetail?.status || 'active'
+  const memberCount = members?.length || 0
+  const maxMembers = groupDetail?.maxMembers || 10
+  const cycleLength = groupDetail?.cycleLength || 30
+  const contributionAmount = groupDetail?.contributionAmount || 500
+  const totalCollected = groupDetail?.totalCollected || 0
+  const nextPayoutDate = groupDetail?.nextPayoutDate || 'TBD'
 
   const handleShareLink = () => {
     setIsInviteModalOpen(true)
@@ -73,7 +85,7 @@ export const GroupDetailPage: React.FC<GroupDetailPageProps> = ({
               Invite Members
             </button>
             <span className="px-3 py-1 rounded-full text-sm font-semibold bg-green-100 dark:bg-emerald-900/40 text-green-800 dark:text-emerald-300">
-              Active
+              {isLoadingDetail ? 'Loading...' : groupStatus.charAt(0).toUpperCase() + groupStatus.slice(1)}
             </span>
           </div>
         </div>
@@ -81,19 +93,27 @@ export const GroupDetailPage: React.FC<GroupDetailPageProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6">
           <div className="bg-gray-50 dark:bg-slate-700/50 p-4 rounded border border-gray-100 dark:border-slate-600">
             <p className="text-sm text-gray-600 dark:text-slate-400">Members</p>
-            <p className="text-2xl font-bold text-gray-900 dark:text-slate-100">8/10</p>
+            <p className="text-2xl font-bold text-gray-900 dark:text-slate-100">
+              {isLoadingMembers ? '...' : `${memberCount}/${maxMembers}`}
+            </p>
           </div>
           <div className="bg-gray-50 dark:bg-slate-700/50 p-4 rounded border border-gray-100 dark:border-slate-600">
             <p className="text-sm text-gray-600 dark:text-slate-400">Cycle Length</p>
-            <p className="text-2xl font-bold text-gray-900 dark:text-slate-100">30 days</p>
+            <p className="text-2xl font-bold text-gray-900 dark:text-slate-100">
+              {isLoadingDetail ? '...' : `${cycleLength} days`}
+            </p>
           </div>
           <div className="bg-gray-50 dark:bg-slate-700/50 p-4 rounded border border-gray-100 dark:border-slate-600">
             <p className="text-sm text-gray-600 dark:text-slate-400">Contribution</p>
-            <p className="text-2xl font-bold text-gray-900 dark:text-slate-100">$500</p>
+            <p className="text-2xl font-bold text-gray-900 dark:text-slate-100">
+              {isLoadingDetail ? '...' : `$${contributionAmount}`}
+            </p>
           </div>
           <div className="bg-gray-50 dark:bg-slate-700/50 p-4 rounded border border-gray-100 dark:border-slate-600">
             <p className="text-sm text-gray-600 dark:text-slate-400">Total Collected</p>
-            <p className="text-2xl font-bold text-gray-900 dark:text-slate-100">$4,000</p>
+            <p className="text-2xl font-bold text-gray-900 dark:text-slate-100">
+              {isLoadingDetail ? '...' : `$${totalCollected}`}
+            </p>
           </div>
         </div>
       </div>
@@ -134,12 +154,15 @@ export const GroupDetailPage: React.FC<GroupDetailPageProps> = ({
                     Next Payout
                   </h3>
                   <p className="text-2xl font-bold text-blue-600 dark:text-indigo-400">
-                    Feb 28, 2026
+                    {isLoadingDetail ? 'Loading...' : nextPayoutDate}
                   </p>
                 </div>
                 <TransactionHistory groupId={groupId} />
               </div>
-              <ContributionForm groupId={groupId} contributionAmount={500} />
+              <ContributionForm 
+                groupId={groupId} 
+                contributionAmount={contributionAmount}
+              />
             </div>
           )}
 
