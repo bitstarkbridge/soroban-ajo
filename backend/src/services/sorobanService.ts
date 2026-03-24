@@ -1,5 +1,7 @@
 import * as StellarSdk from 'stellar-sdk'
 import { createModuleLogger } from '../utils/logger'
+import { ErrorReporter } from '../utils/errorReporter'
+import * as Sentry from '@sentry/node'
 
 const logger = createModuleLogger('SorobanService')
 
@@ -330,11 +332,25 @@ export class SorobanService {
     } = groupData
 
     if (signedXdr) {
-      const { hash, result } = await this.submitSignedXdr(signedXdr)
-      const groupId =
-        result.returnValue?.str()?.toString() ?? result.returnValue?.sym()?.toString() ?? hash
-      return { groupId, txHash: hash }
+      try {
+        const { hash, result } = await this.submitSignedXdr(signedXdr)
+        const groupId =
+          result.returnValue?.str()?.toString() ?? result.returnValue?.sym()?.toString() ?? hash
+        return { groupId, txHash: hash }
+      } catch (error) {
+        ErrorReporter.captureException(error as Error, {
+          method: 'createGroup',
+          signedXdr,
+        })
+        throw error
+      }
     }
+
+    ErrorReporter.addBreadcrumb({
+      message: 'Building createGroup transaction',
+      category: 'soroban',
+      data: { name, adminPublicKey },
+    })
 
     const args: StellarSdk.xdr.ScVal[] = [
       StellarSdk.nativeToScVal(name, { type: 'string' }),
@@ -345,8 +361,16 @@ export class SorobanService {
       new StellarSdk.Address(adminPublicKey).toScVal(),
     ]
 
-    const unsignedXdr = await this.buildUnsignedTransaction(adminPublicKey, 'create_group', args)
-    return { unsignedXdr }
+    try {
+      const unsignedXdr = await this.buildUnsignedTransaction(adminPublicKey, 'create_group', args)
+      return { unsignedXdr }
+    } catch (error) {
+      ErrorReporter.captureException(error as Error, {
+        method: 'createGroup',
+        args: { name, adminPublicKey },
+      })
+      throw error
+    }
   }
 
   /**

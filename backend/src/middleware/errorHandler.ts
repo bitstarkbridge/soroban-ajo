@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express'
+import * as Sentry from '@sentry/node'
 import { captureMonitoringError } from '../config/logger.config'
 import { createModuleLogger } from '../utils/logger'
 import { AppError, ErrorFactory } from '../errors/AppError'
@@ -59,6 +60,9 @@ export const errorHandler = (
 
   if (error.statusCode >= 500 || !error.isOperational) {
     captureMonitoringError(err, logPayload)
+    Sentry.captureException(err, {
+      extra: logPayload,
+    })
   }
 
   const responsePayload = {

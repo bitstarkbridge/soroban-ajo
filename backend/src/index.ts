@@ -4,6 +4,8 @@ import helmet from 'helmet'
 import dotenv from 'dotenv'
 import { errorHandler } from './middleware/errorHandler'
 import { requestLogger } from './middleware/requestLogger'
+import * as Sentry from '@sentry/node'
+import { initSentry } from './config/sentry.config'
 // import { setupSwagger } from './middleware/swagger'
 import { logger } from './utils/logger'
 import { groupsRouter } from './routes/groups'
@@ -24,6 +26,7 @@ import { kycRouter } from './routes/kyc' // new KYC routes
 dotenv.config()
 
 const app = express()
+initSentry(app)
 const PORT = process.env.PORT || 3001
 // Middleware
 app.use(helmet())
@@ -69,6 +72,7 @@ app.use((req, res) => {
 })
 
 // Error handling
+Sentry.setupExpressErrorHandler(app)
 app.use(errorHandler)
 
 // Start server and keep reference so we can close it on shutdown
