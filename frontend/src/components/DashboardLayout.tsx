@@ -10,10 +10,12 @@ import { useAuthContext } from '@/context/AuthContext'
 import { GroupCard } from './GroupCard'
 import { PageTransition } from './PageTransition'
 import { WalletConnector } from './WalletConnector'
+import { useSkeletonDelay } from '@/hooks/useSkeletonDelay'
 
 export const DashboardLayout: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true)
   const { isAuthenticated } = useAuthContext()
+  const showSkeleton = useSkeletonDelay(isLoading)
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -50,37 +52,50 @@ export const DashboardLayout: React.FC = () => {
           {isAuthenticated && (
             <>
               {/* Stat Cards Section */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <div className="bg-white dark:bg-slate-800 rounded-lg shadow dark:shadow-slate-900/50 p-6 border border-gray-100 dark:border-slate-700">
+              <div
+                className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+                aria-busy={showSkeleton}
+                aria-label={showSkeleton ? 'Loading dashboard stats' : 'Dashboard stats'}
+              >
+                <div className="bg-white dark:bg-slate-800 rounded-lg shadow dark:shadow-slate-900/50 p-6 border border-gray-100 dark:border-slate-700 relative overflow-hidden">
+                  {showSkeleton && (
+                    <div className="absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-white/20 to-transparent z-10" />
+                  )}
                   <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-slate-100">
                     Active Groups
                   </h3>
-                  {isLoading ? (
-                    <div className="skeleton h-9 w-12 rounded mt-1"></div>
+                  {showSkeleton ? (
+                    <div className="skeleton h-9 w-12 rounded mt-1" />
                   ) : (
-                    <p className="text-3xl font-bold text-blue-600 dark:text-indigo-400">0</p>
+                    <p className="text-3xl font-bold text-blue-600 dark:text-indigo-400 animate-fade-in">0</p>
                   )}
                 </div>
 
-                <div className="bg-white dark:bg-slate-800 rounded-lg shadow dark:shadow-slate-900/50 p-6 border border-gray-100 dark:border-slate-700">
+                <div className="bg-white dark:bg-slate-800 rounded-lg shadow dark:shadow-slate-900/50 p-6 border border-gray-100 dark:border-slate-700 relative overflow-hidden">
+                  {showSkeleton && (
+                    <div className="absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-white/20 to-transparent z-10" />
+                  )}
                   <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-slate-100">
                     Total Saved
                   </h3>
-                  {isLoading ? (
-                    <div className="skeleton h-9 w-24 rounded mt-1"></div>
+                  {showSkeleton ? (
+                    <div className="skeleton h-9 w-24 rounded mt-1" />
                   ) : (
-                    <p className="text-3xl font-bold text-green-600 dark:text-emerald-400">$0.00</p>
+                    <p className="text-3xl font-bold text-green-600 dark:text-emerald-400 animate-fade-in">$0.00</p>
                   )}
                 </div>
 
-                <div className="bg-white dark:bg-slate-800 rounded-lg shadow dark:shadow-slate-900/50 p-6 border border-gray-100 dark:border-slate-700">
+                <div className="bg-white dark:bg-slate-800 rounded-lg shadow dark:shadow-slate-900/50 p-6 border border-gray-100 dark:border-slate-700 relative overflow-hidden">
+                  {showSkeleton && (
+                    <div className="absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-white/20 to-transparent z-10" />
+                  )}
                   <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-slate-100">
                     Next Payout
                   </h3>
-                  {isLoading ? (
-                    <div className="skeleton h-6 w-32 rounded mt-2"></div>
+                  {showSkeleton ? (
+                    <div className="skeleton h-6 w-32 rounded mt-2" />
                   ) : (
-                    <p className="text-gray-600 dark:text-slate-400">None scheduled</p>
+                    <p className="text-gray-600 dark:text-slate-400 animate-fade-in">None scheduled</p>
                   )}
                 </div>
               </div>
@@ -107,8 +122,8 @@ export const DashboardLayout: React.FC = () => {
                   </Link>
                 </div>
 
-                {isLoading ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {showSkeleton ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" aria-busy="true" aria-label="Loading groups">
                     <GroupCard isLoading={true} />
                     <GroupCard isLoading={true} />
                     <GroupCard isLoading={true} />

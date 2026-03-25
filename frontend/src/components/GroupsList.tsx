@@ -47,38 +47,35 @@ export const GroupsList: React.FC<GroupsListProps> = ({
 
   if (isLoading) {
     return (
-      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-surface-200/80 dark:border-slate-700 overflow-hidden">
+      <div
+        className="bg-white dark:bg-slate-800 rounded-2xl border border-surface-200/80 dark:border-slate-700 overflow-hidden"
+        aria-busy="true"
+        aria-label="Loading groups"
+      >
         <table className="table-premium">
           <thead>
             <tr>
-              <th className="px-5 py-3.5 text-left text-xs font-semibold text-surface-500 dark:text-slate-400 uppercase tracking-wider">
-                Name
-              </th>
-              <th className="px-5 py-3.5 text-left text-xs font-semibold text-surface-500 uppercase tracking-wider">
-                Members
-              </th>
-              <th className="px-5 py-3.5 text-left text-xs font-semibold text-surface-500 uppercase tracking-wider">
-                Contributions
-              </th>
-              <th className="px-5 py-3.5 text-left text-xs font-semibold text-surface-500 uppercase tracking-wider">
-                Next Payout
-              </th>
-              <th className="px-5 py-3.5 text-left text-xs font-semibold text-surface-500 uppercase tracking-wider">
-                Status
-              </th>
-              <th className="px-5 py-3.5 text-left text-xs font-semibold text-surface-500 uppercase tracking-wider">
-                Actions
-              </th>
+              {['Name', 'Members', 'Contributions', 'Next Payout', 'Status', 'Actions'].map((col) => (
+                <th key={col} className="px-5 py-3.5 text-left text-xs font-semibold text-surface-500 dark:text-slate-400 uppercase tracking-wider">
+                  {col}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
             {[...Array(5)].map((_, i) => (
-              <tr key={i} className="animate-pulse-soft" style={{ animationDelay: `${i * 100}ms` }}>
+              <tr key={i} className="relative overflow-hidden" style={{ animationDelay: `${i * 80}ms` }}>
                 <td className="px-5 py-4">
-                  <div className="skeleton h-4 w-32 rounded-md" />
+                  <div className="space-y-1.5">
+                    <div className="skeleton h-4 w-32 rounded-md" />
+                    <div className="skeleton h-3 w-20 rounded-md" />
+                  </div>
                 </td>
                 <td className="px-5 py-4">
-                  <div className="skeleton h-4 w-16 rounded-md" />
+                  <div className="flex items-center gap-2">
+                    <div className="skeleton h-4 w-10 rounded-md" />
+                    <div className="skeleton h-1.5 w-12 rounded-full" />
+                  </div>
                 </td>
                 <td className="px-5 py-4">
                   <div className="skeleton h-4 w-20 rounded-md" />
