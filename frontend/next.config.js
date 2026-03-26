@@ -7,6 +7,8 @@ const withPWA =
         dest: 'public',
         register: true,
         skipWaiting: true,
+        customWorkerDir: 'public',
+        customWorkerSrc: 'sw-custom.js',
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/fonts\.(?:gstatic)\.com\/.*/i,
