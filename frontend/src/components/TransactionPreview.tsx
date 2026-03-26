@@ -100,6 +100,8 @@ export const TransactionPreview: React.FC<TransactionPreviewProps> = ({
   availableBalanceXLM,
 }) => {
   const backdropRef = useRef<HTMLDivElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const previousFocusRef = useRef<HTMLElement | null>(null)
 
   // Close on Escape
   useEffect(() => {
@@ -111,10 +113,41 @@ export const TransactionPreview: React.FC<TransactionPreviewProps> = ({
     return () => window.removeEventListener('keydown', handler)
   }, [isOpen, onClose])
 
-  // Lock body scroll
+  // Lock body scroll + save/restore focus
   useEffect(() => {
-    document.body.style.overflow = isOpen ? 'hidden' : ''
+    if (isOpen) {
+      previousFocusRef.current = document.activeElement as HTMLElement
+      document.body.style.overflow = 'hidden'
+      // Focus the panel on open
+      setTimeout(() => panelRef.current?.focus(), 0)
+    } else {
+      document.body.style.overflow = ''
+      previousFocusRef.current?.focus()
+    }
     return () => { document.body.style.overflow = '' }
+  }, [isOpen])
+
+  // Focus trap inside panel
+  useEffect(() => {
+    if (!isOpen || !panelRef.current) return
+    const panel = panelRef.current
+    const focusableSelectors =
+      'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
+    const handleTab = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab') return
+      const focusables = Array.from(panel.querySelectorAll<HTMLElement>(focusableSelectors))
+      if (!focusables.length) return
+      const first = focusables[0]
+      const last = focusables[focusables.length - 1]
+      if (e.shiftKey) {
+        if (document.activeElement === first) { last.focus(); e.preventDefault() }
+      } else {
+        if (document.activeElement === last) { first.focus(); e.preventDefault() }
+      }
+    }
+    panel.addEventListener('keydown', handleTab)
+    return () => panel.removeEventListener('keydown', handleTab)
   }, [isOpen])
 
   if (!isOpen || !transaction) return null
@@ -142,7 +175,11 @@ export const TransactionPreview: React.FC<TransactionPreviewProps> = ({
       aria-labelledby="tx-preview-title"
     >
       {/* Panel */}
-      <div className="w-full sm:max-w-md bg-white rounded-t-2xl sm:rounded-2xl shadow-xl overflow-hidden">
+      <div
+        ref={panelRef}
+        tabIndex={-1}
+        className="w-full sm:max-w-md bg-white rounded-t-2xl sm:rounded-2xl shadow-xl overflow-hidden focus:outline-none"
+      >
 
         {/* ── Header ── */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
@@ -156,8 +193,8 @@ export const TransactionPreview: React.FC<TransactionPreviewProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition p-1 rounded"
-            aria-label="Close"
+            className="text-gray-400 hover:text-gray-600 transition p-1 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            aria-label="Close transaction preview"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -235,7 +272,11 @@ export const TransactionPreview: React.FC<TransactionPreviewProps> = ({
 
           {/* Insufficient balance warning */}
           {insufficient && !isSimulating && (
-            <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-xl p-3">
+            <div
+              role="alert"
+              aria-live="assertive"
+              className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-xl p-3"
+            >
               <svg className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
                 <path
                   fillRule="evenodd"
@@ -255,7 +296,11 @@ export const TransactionPreview: React.FC<TransactionPreviewProps> = ({
 
           {/* Simulation warning (non-balance errors) */}
           {!isSimulating && simulation?.error && !insufficient && (
-            <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl p-3">
+            <div
+              role="alert"
+              aria-live="polite"
+              className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl p-3"
+            >
               <svg className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
                 <path
                   fillRule="evenodd"
@@ -273,14 +318,17 @@ export const TransactionPreview: React.FC<TransactionPreviewProps> = ({
           <button
             onClick={onClose}
             disabled={isSubmitting}
-            className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-700 text-sm font-medium hover:bg-gray-50 transition disabled:opacity-50"
+            aria-label="Cancel transaction"
+            className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-700 text-sm font-medium hover:bg-gray-50 transition disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400"
           >
             Cancel
           </button>
           <button
             onClick={onConfirm}
             disabled={!canConfirm}
-            className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            aria-label={isSubmitting ? 'Signing and submitting transaction' : 'Sign and submit transaction'}
+            aria-busy={isSubmitting}
+            className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
           >
             {isSubmitting ? (
               <>

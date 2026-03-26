@@ -61,7 +61,6 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-dark-bg-primary transition-colors duration-300">
-    <div className="min-h-screen bg-gray-50">
       {/* Skip Links */}
       <a
         href="#main-content"
@@ -104,6 +103,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
                   href={link.href}
                   data-tour={link.dataTour}
                   aria-current={isActive ? 'page' : undefined}
+                  aria-label={link.label}
                   className={`flex items-center gap-2 px-4 py-3 border-b-2 font-medium text-sm transition-colors whitespace-nowrap ${
                     isActive
                       ? 'border-blue-600 dark:border-indigo-400 text-blue-600 dark:text-indigo-400'
@@ -161,6 +161,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
                     href="https://stellar.org"
                     target="_blank"
                     rel="noopener noreferrer"
+                    aria-label="Stellar Network (opens in new tab)"
                     className="text-gray-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-indigo-400"
                   >
                     Stellar Network
@@ -176,6 +177,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
                     href="https://github.com"
                     target="_blank"
                     rel="noopener noreferrer"
+                    aria-label="GitHub (opens in new tab)"
                     className="text-gray-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-indigo-400"
                   >
                     GitHub
@@ -186,6 +188,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
                     href="https://twitter.com"
                     target="_blank"
                     rel="noopener noreferrer"
+                    aria-label="Twitter (opens in new tab)"
                     className="text-gray-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-indigo-400"
                   >
                     Twitter
@@ -196,6 +199,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
                     href="https://discord.com"
                     target="_blank"
                     rel="noopener noreferrer"
+                    aria-label="Discord (opens in new tab)"
                     className="text-gray-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-indigo-400"
                   >
                     Discord

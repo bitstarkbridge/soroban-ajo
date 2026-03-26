@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useCallback, useState, memo } from 'react';
+import React, { useEffect, useCallback, useState, useRef, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
 import { useWallet } from '../hooks/useWallet';
@@ -45,13 +45,19 @@ export const WalletModal: React.FC<WalletModalProps> = memo(({
   const [statusMessage, setStatusMessage] = useState('');
   const [selectedWallet, setSelectedWallet] = useState<WalletType | null>(null);
   const [selectedNetwork, setSelectedNetwork] = useState<'testnet' | 'mainnet' | 'futurenet'>('testnet');
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   // Reset state when modal opens
   useEffect(() => {
     if (isOpen) {
+      previousFocusRef.current = document.activeElement as HTMLElement;
       setConnectionState('idle');
       setStatusMessage('');
       setSelectedWallet(null);
+      setTimeout(() => panelRef.current?.focus(), 0);
+    } else {
+      previousFocusRef.current?.focus();
     }
   }, [isOpen]);
 
@@ -72,6 +78,28 @@ export const WalletModal: React.FC<WalletModalProps> = memo(({
       document.body.style.overflow = '';
     };
   }, [isOpen, handleKeyDown]);
+
+  // Focus trap
+  useEffect(() => {
+    if (!isOpen || !panelRef.current) return;
+    const panel = panelRef.current;
+    const focusableSelectors =
+      'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+    const handleTab = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab') return;
+      const focusables = Array.from(panel.querySelectorAll<HTMLElement>(focusableSelectors));
+      if (!focusables.length) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (e.shiftKey) {
+        if (document.activeElement === first) { last.focus(); e.preventDefault(); }
+      } else {
+        if (document.activeElement === last) { first.focus(); e.preventDefault(); }
+      }
+    };
+    panel.addEventListener('keydown', handleTab);
+    return () => panel.removeEventListener('keydown', handleTab);
+  }, [isOpen]);
 
   const handleWalletSelect = useCallback(async (walletType: WalletType) => {
     setSelectedWallet(walletType);
@@ -128,10 +156,12 @@ export const WalletModal: React.FC<WalletModalProps> = memo(({
 
           {/* Modal panel */}
           <motion.div
+            ref={panelRef}
             variants={modalVariants}
             initial="hidden"
             animate="visible"
             exit="exit"
+            tabIndex={-1}
             className="
               relative w-full max-w-md
               rounded-2xl overflow-hidden
@@ -139,6 +169,7 @@ export const WalletModal: React.FC<WalletModalProps> = memo(({
               backdrop-blur-xl
               border border-surface-200/60 dark:border-surface-700/40
               shadow-xl
+              focus:outline-none
             "
           >
             {/* Gradient top accent */}

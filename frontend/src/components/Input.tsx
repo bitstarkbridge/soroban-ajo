@@ -121,6 +121,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
         {/* Label */}
         {label && (
           <label
+            htmlFor={props.id}
             className={clsx(
               'block text-sm font-medium mb-1',
               'text-gray-700 dark:text-gray-300',
