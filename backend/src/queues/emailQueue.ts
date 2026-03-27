@@ -91,3 +91,85 @@ export async function getEmailQueueStats() {
     delayed,
   }
 }
+
+// ── Typed queueEmail helper (Issue #378) ──────────────────────────────────
+// Provides a clean API for controllers to enqueue specific email types
+// without importing the full EmailService.
+
+export const queueEmail = {
+  async custom(opts: { to: string; subject: string; html: string }): Promise<string> {
+    return addEmailJob({ to: opts.to, subject: opts.subject, body: opts.html })
+  },
+
+  async welcome(to: string, name: string): Promise<string> {
+    return addEmailJob({
+      to,
+      subject: 'Welcome to Ajo!',
+      body: '',
+      template: 'welcome',
+      // The actual render happens in the job worker via emailService
+    }, { priority: 5 })
+  },
+
+  async contributionReminder(
+    to: string,
+    groupName: string,
+    amount: string,
+    dueDate: string,
+    cycleNumber: number,
+    groupId: string
+  ): Promise<string> {
+    return addEmailJob({
+      to,
+      subject: `Contribution Reminder: ${groupName}`,
+      body: JSON.stringify({ groupName, amount, dueDate, cycleNumber, groupId }),
+      template: 'contributionReminder',
+    })
+  },
+
+  async payoutNotification(
+    to: string,
+    groupName: string,
+    amount: string,
+    txHash: string,
+    cycleNumber: number,
+    date: string
+  ): Promise<string> {
+    return addEmailJob({
+      to,
+      subject: `Payout Received: ${groupName}`,
+      body: JSON.stringify({ groupName, amount, txHash, cycleNumber, date }),
+      template: 'payoutNotification',
+    }, { priority: 10 })
+  },
+
+  async transactionReceipt(
+    to: string,
+    data: { groupName: string; amount: string; txHash: string; date: string; cycleNumber: number }
+  ): Promise<string> {
+    return addEmailJob({
+      to,
+      subject: 'Transaction Receipt',
+      body: JSON.stringify(data),
+      template: 'transactionReceipt',
+    }, { priority: 8 })
+  },
+
+  async weeklySummary(to: string, data: object): Promise<string> {
+    return addEmailJob({
+      to,
+      subject: 'Your Weekly Ajo Summary',
+      body: JSON.stringify(data),
+      template: 'weeklySummary',
+    })
+  },
+
+  async verification(to: string, token: string): Promise<string> {
+    return addEmailJob({
+      to,
+      subject: 'Verify Your Email',
+      body: JSON.stringify({ token }),
+      template: 'emailVerification',
+    }, { priority: 10 })
+  },
+}

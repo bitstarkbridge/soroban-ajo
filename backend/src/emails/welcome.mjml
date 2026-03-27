@@ -1,0 +1,80 @@
+<mjml>
+  <mj-head>
+    <mj-title>Welcome to Ajo</mj-title>
+    <mj-preview>Start saving with your community on the Stellar blockchain.</mj-preview>
+    <mj-attributes>
+      <mj-all font-family="Inter, Arial, sans-serif" />
+      <mj-text font-size="15px" line-height="1.6" color="#1e293b" />
+      <mj-button background-color="#4f46e5" border-radius="8px" font-size="15px" font-weight="600" inner-padding="14px 28px" />
+    </mj-attributes>
+    <mj-style>
+      .brand-header { background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); }
+      .stat-box { border-radius: 8px; }
+    </mj-style>
+  </mj-head>
+  <mj-body background-color="#f1f5f9">
+
+    <!-- Header -->
+    <mj-section css-class="brand-header" background-color="#4f46e5" padding="32px 24px 24px">
+      <mj-column>
+        <mj-text align="center" color="#ffffff" font-size="26px" font-weight="700" letter-spacing="-0.5px">
+          🪙 Ajo
+        </mj-text>
+        <mj-text align="center" color="rgba(255,255,255,0.8)" font-size="13px" padding-top="4px">
+          Decentralized Savings Groups
+        </mj-text>
+      </mj-column>
+    </mj-section>
+
+    <!-- Body -->
+    <mj-section background-color="#ffffff" padding="40px 32px 32px" border-radius="0 0 12px 12px">
+      <mj-column>
+        <mj-text font-size="22px" font-weight="700" color="#0f172a" padding-bottom="8px">
+          Welcome, {{name}}! 👋
+        </mj-text>
+        <mj-text color="#475569">
+          You're now part of Ajo — a decentralized platform for rotating savings groups (ROSCAs) powered by the Stellar blockchain.
+        </mj-text>
+        <mj-text color="#475569" padding-top="0">
+          Here's what you can do to get started:
+        </mj-text>
+
+        <!-- Steps -->
+        <mj-table padding="16px 0">
+          <tr>
+            <td style="padding: 10px 12px; background: #f8fafc; border-radius: 8px; border-left: 3px solid #4f46e5;">
+              <strong style="color: #4f46e5;">1.</strong> <span style="color: #334155;">Create or join a savings group</span>
+            </td>
+          </tr>
+          <tr><td style="height: 8px;"></td></tr>
+          <tr>
+            <td style="padding: 10px 12px; background: #f8fafc; border-radius: 8px; border-left: 3px solid #7c3aed;">
+              <strong style="color: #7c3aed;">2.</strong> <span style="color: #334155;">Connect your Freighter wallet</span>
+            </td>
+          </tr>
+          <tr><td style="height: 8px;"></td></tr>
+          <tr>
+            <td style="padding: 10px 12px; background: #f8fafc; border-radius: 8px; border-left: 3px solid #10b981;">
+              <strong style="color: #10b981;">3.</strong> <span style="color: #334155;">Make your first contribution</span>
+            </td>
+          </tr>
+        </mj-table>
+
+        <mj-button href="{{dashboardUrl}}" align="left" padding-top="24px">
+          Go to Dashboard →
+        </mj-button>
+      </mj-column>
+    </mj-section>
+
+    <!-- Footer -->
+    <mj-section padding="24px 32px">
+      <mj-column>
+        <mj-text align="center" font-size="12px" color="#94a3b8">
+          You received this because you signed up for Ajo.<br />
+          <a href="{{unsubscribeUrl}}" style="color: #94a3b8;">Unsubscribe</a>
+        </mj-text>
+      </mj-column>
+    </mj-section>
+
+  </mj-body>
+</mjml>
