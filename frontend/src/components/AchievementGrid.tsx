@@ -3,6 +3,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import type { Achievement } from '@/hooks/useGamification'
+import {
+  buildAchievementSharePayload,
+  copyToClipboard,
+  shareContentViaTelegram,
+  shareContentViaTwitter,
+  shareContentViaWebShare,
+  shareContentViaWhatsApp,
+} from '@/utils/shareUtils'
 
 interface AchievementGridProps {
   achievements: Achievement[]
@@ -10,10 +18,33 @@ interface AchievementGridProps {
 
 export function AchievementGrid({ achievements }: AchievementGridProps) {
   const [showCelebration, setShowCelebration] = useState(false)
+  const [recentlySharedId, setRecentlySharedId] = useState<string | null>(null)
   const unlockedCount = useMemo(
     () => achievements.filter((achievement) => achievement.unlocked).length,
     [achievements]
   )
+
+  const shareUrl = typeof window !== 'undefined' ? window.location.href : undefined
+
+  const handleCopyShare = async (achievement: Achievement) => {
+    const payload = buildAchievementSharePayload(achievement.title, achievement.xpReward, shareUrl)
+    const copied = await copyToClipboard(`${payload.text} ${payload.url ?? ''}`.trim())
+
+    if (copied) {
+      setRecentlySharedId(achievement.id)
+      window.setTimeout(() => setRecentlySharedId(null), 1800)
+    }
+  }
+
+  const handleWebShare = async (achievement: Achievement) => {
+    const payload = buildAchievementSharePayload(achievement.title, achievement.xpReward, shareUrl)
+    const shared = await shareContentViaWebShare(payload)
+
+    if (shared) {
+      setRecentlySharedId(achievement.id)
+      window.setTimeout(() => setRecentlySharedId(null), 1800)
+    }
+  }
 
   useEffect(() => {
     if (!achievements.some((achievement) => achievement.recentlyUnlocked)) {
@@ -115,6 +146,73 @@ export function AchievementGrid({ achievements }: AchievementGridProps) {
                   />
                 </div>
               </div>
+
+              {achievement.unlocked && (
+                <div className="mt-4 rounded-xl border border-orange-200/80 bg-white/80 p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-orange-600">
+                    Share milestone
+                  </p>
+                  <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    <button
+                      onClick={() =>
+                        shareContentViaTwitter(
+                          buildAchievementSharePayload(
+                            achievement.title,
+                            achievement.xpReward,
+                            shareUrl
+                          )
+                        )
+                      }
+                      className="rounded-lg bg-slate-900 px-2 py-2 text-xs font-semibold text-white transition hover:bg-slate-800"
+                    >
+                      X
+                    </button>
+                    <button
+                      onClick={() =>
+                        shareContentViaWhatsApp(
+                          buildAchievementSharePayload(
+                            achievement.title,
+                            achievement.xpReward,
+                            shareUrl
+                          )
+                        )
+                      }
+                      className="rounded-lg bg-emerald-600 px-2 py-2 text-xs font-semibold text-white transition hover:bg-emerald-500"
+                    >
+                      WhatsApp
+                    </button>
+                    <button
+                      onClick={() =>
+                        shareContentViaTelegram(
+                          buildAchievementSharePayload(
+                            achievement.title,
+                            achievement.xpReward,
+                            shareUrl
+                          )
+                        )
+                      }
+                      className="rounded-lg bg-sky-600 px-2 py-2 text-xs font-semibold text-white transition hover:bg-sky-500"
+                    >
+                      Telegram
+                    </button>
+                    <button
+                      onClick={() => handleCopyShare(achievement)}
+                      className="rounded-lg bg-orange-500 px-2 py-2 text-xs font-semibold text-white transition hover:bg-orange-400"
+                    >
+                      {recentlySharedId === achievement.id ? 'Copied' : 'Copy'}
+                    </button>
+                  </div>
+
+                  {typeof navigator !== 'undefined' && navigator.share && (
+                    <button
+                      onClick={() => handleWebShare(achievement)}
+                      className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+                    >
+                      Share via device
+                    </button>
+                  )}
+                </div>
+              )}
             </motion.article>
           )
         })}

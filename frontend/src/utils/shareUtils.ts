@@ -101,6 +101,91 @@ export const shareViaWebShare = async (
   return false;
 };
 
+export interface SocialSharePayload {
+  title: string;
+  text: string;
+  url?: string;
+}
+
+const withOptionalUrl = (text: string, url?: string): string => {
+  return url ? `${text} ${url}`.trim() : text;
+};
+
+export const shareContentViaEmail = (
+  payload: SocialSharePayload,
+  email?: string
+): void => {
+  const subject = encodeURIComponent(payload.title);
+  const body = encodeURIComponent(withOptionalUrl(payload.text, payload.url));
+  const mailtoLink = email
+    ? `mailto:${email}?subject=${subject}&body=${body}`
+    : `mailto:?subject=${subject}&body=${body}`;
+
+  window.location.href = mailtoLink;
+};
+
+export const shareContentViaTwitter = (payload: SocialSharePayload): void => {
+  const text = encodeURIComponent(withOptionalUrl(payload.text, payload.url));
+  window.open(
+    `https://twitter.com/intent/tweet?text=${text}`,
+    '_blank',
+    'width=550,height=420'
+  );
+};
+
+export const shareContentViaWhatsApp = (payload: SocialSharePayload): void => {
+  const text = encodeURIComponent(withOptionalUrl(payload.text, payload.url));
+  window.open(`https://wa.me/?text=${text}`, '_blank');
+};
+
+export const shareContentViaTelegram = (payload: SocialSharePayload): void => {
+  const text = encodeURIComponent(payload.text);
+  const url = encodeURIComponent(payload.url || window.location.href);
+  window.open(`https://t.me/share/url?url=${url}&text=${text}`, '_blank');
+};
+
+export const shareContentViaWebShare = async (
+  payload: SocialSharePayload
+): Promise<boolean> => {
+  if (!navigator.share) {
+    return false;
+  }
+
+  try {
+    await navigator.share({
+      title: payload.title,
+      text: payload.text,
+      url: payload.url,
+    });
+    return true;
+  } catch (error) {
+    if ((error as Error).name !== 'AbortError') {
+      console.error('Error sharing content:', error);
+    }
+    return false;
+  }
+};
+
+export const buildAchievementSharePayload = (
+  achievementTitle: string,
+  xpReward: number,
+  url?: string
+): SocialSharePayload => ({
+  title: `Achievement unlocked: ${achievementTitle}`,
+  text: `I just unlocked \"${achievementTitle}\" and earned ${xpReward} XP on Ajo.`,
+  url,
+});
+
+export const buildMilestoneSharePayload = (
+  milestoneLabel: string,
+  value: number,
+  url?: string
+): SocialSharePayload => ({
+  title: `Savings milestone reached: ${milestoneLabel}`,
+  text: `I just reached the ${milestoneLabel} savings milestone (${value.toFixed(2)} XLM) on Ajo.`,
+  url,
+});
+
 export const parseInviteCode = (code: string): { groupId: string } | null => {
   try {
     const parts = code.split('-');
