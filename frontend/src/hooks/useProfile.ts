@@ -7,6 +7,11 @@ export interface UserProfile {
   avatar?: string
   email?: string
   joinedDate: string
+
+  // KYC/AML
+  kycLevel?: number
+  kycStatus?: string
+
   preferences: UserPreferences
   stats: UserStats
 }
@@ -17,6 +22,21 @@ export interface UserPreferences {
   theme: 'light' | 'dark' | 'auto'
   language: string
   currency: string
+  emailNotifications?: {
+    enabled: boolean
+    frequency: 'instant' | 'daily' | 'weekly'
+    events: {
+      contributionDue24h: boolean
+      contributionDue1h: boolean
+      contributionOverdue: boolean
+      payoutReceived: boolean
+      memberJoined: boolean
+      cycleCompleted: boolean
+      announcements: boolean
+      groupInvitation: boolean
+      securityAlerts: boolean
+    }
+  }
 }
 
 export interface UserStats {
@@ -155,6 +175,9 @@ export const useProfile = (address?: string) => {
             totalContributions: 0,
             totalReceived: 0,
           },
+          // default kyc values
+          kycLevel: 0,
+          kycStatus: 'none',
         }
         storageService.saveProfile(userProfile)
       }
@@ -332,11 +355,5 @@ export const useProfile = (address?: string) => {
     addActivity,
     updateStats,
     refreshProfile: () => address && loadProfile(address),
-    isLoading,
-    error,
-    updateProfile,
-    savePreferences,
-    refreshProfile: fetchProfile,
-    refreshActivities: fetchActivities,
   }
 }

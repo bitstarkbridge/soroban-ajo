@@ -3,7 +3,10 @@
 // Status: Placeholder
 
 import React, { useState, useRef, useEffect } from 'react'
-import { useFormDraft } from '../hooks/useFormDraft';
+import { useFormDraft } from '../hooks/useFormDraft'
+import { useCreateGroup } from '../hooks/useContractData'
+import { useRouter } from 'next/navigation'
+import toast from 'react-hot-toast'
 
 interface GroupFormData {
   groupName: string
@@ -29,6 +32,9 @@ interface GroupCreationFormProps {
 }
 
 export const GroupCreationForm: React.FC<GroupCreationFormProps> = ({ onSuccess }) => {
+  const router = useRouter()
+  const createGroupMutation = useCreateGroup()
+  
   const [formData, setFormData] = useState<GroupFormData>({
     groupName: '',
     description: '',
@@ -43,11 +49,12 @@ export const GroupCreationForm: React.FC<GroupCreationFormProps> = ({ onSuccess 
 
   const [errors, setErrors] = useState<FormErrors>({})
   const [touched, setTouched] = useState<Record<string, boolean>>({})
-  const [loading, setLoading] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const errorSummaryRef = useRef<HTMLDivElement>(null)
   const formRef = useRef<HTMLFormElement>(null)
   const groupNameRef = useRef<HTMLInputElement>(null)
+  
+  const loading = createGroupMutation.isPending
   
   const hasErrors = Object.keys(errors).length > 0
 
@@ -172,22 +179,31 @@ export const GroupCreationForm: React.FC<GroupCreationFormProps> = ({ onSuccess 
       return
     }
 
-    setLoading(true)
     try {
-      // TODO: Submit form data to smart contract
-      // Steps:
-      // 1. Validate form data
-      // 2. Call create_group on Soroban contract
-      // 3. Show success notification
-      // 4. Redirect to group detail page
-      console.log('Create group:', formData)
-      await createGroup(formData);
-      removeDraft();
-      onSuccess?.()
+      // Call create_group on Soroban contract
+      const result = await createGroupMutation.mutateAsync({
+        groupName: formData.groupName,
+        cycleLength: formData.cycleLength,
+        contributionAmount: formData.contributionAmount,
+        maxMembers: formData.maxMembers,
+      })
+      
+      // Clear draft on success
+      removeDraft()
+      
+      // Show success message
+      toast.success(`Group "${formData.groupName}" created successfully!`)
+      
+      // Call onSuccess callback if provided
+      if (onSuccess) {
+        onSuccess()
+      } else {
+        // Redirect to group detail page
+        router.push(`/groups/${result.groupId}`)
+      }
     } catch (err) {
       console.error('Failed to create group:', err)
-    } finally {
-      setLoading(false)
+      toast.error(err instanceof Error ? err.message : 'Failed to create group')
     }
   }
 

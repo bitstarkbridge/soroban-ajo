@@ -1,42 +1,57 @@
-import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 
-export interface Notification {
-  id: string;
-  type: 'contribution_due' | 'contribution_overdue' | 'payout_received' | 'member_joined' | 'cycle_completed' | 'announcement';
-  title: string;
-  message: string;
-  timestamp: number;
-  read: boolean;
-  groupId?: string;
-  actionUrl?: string;
+export interface NotificationPayload {
+  id: string
+  type:
+    | 'contribution_due'
+    | 'contribution_overdue'
+    | 'contribution_received'
+    | 'payout_received'
+    | 'member_joined'
+    | 'member_left'
+    | 'cycle_completed'
+    | 'group_created'
+    | 'announcement'
+  title: string
+  message: string
+  timestamp: number
+  groupId?: string
+  actionUrl?: string
+  metadata?: Record<string, unknown>
+}
+
+export interface Notification extends NotificationPayload {
+  read: boolean
 }
 
 export interface NotificationPreferences {
-  email: boolean;
-  push: boolean;
-  inApp: boolean;
-  contributionDue24h: boolean;
-  contributionDue1h: boolean;
-  contributionOverdue: boolean;
-  payoutReceived: boolean;
-  memberJoined: boolean;
-  cycleCompleted: boolean;
-  announcements: boolean;
+  email: boolean
+  push: boolean
+  inApp: boolean
+  contributionDue24h: boolean
+  contributionDue1h: boolean
+  contributionOverdue: boolean
+  payoutReceived: boolean
+  memberJoined: boolean
+  cycleCompleted: boolean
+  announcements: boolean
 }
 
 interface NotificationState {
-  notifications: Notification[];
-  preferences: NotificationPreferences;
-  pushSubscription: PushSubscription | null;
-  addNotification: (notification: Omit<Notification, 'id' | 'timestamp' | 'read'>) => void;
-  markAsRead: (id: string) => void;
-  markAllAsRead: () => void;
-  deleteNotification: (id: string) => void;
-  clearAll: () => void;
-  updatePreferences: (preferences: Partial<NotificationPreferences>) => void;
-  setPushSubscription: (subscription: PushSubscription | null) => void;
-  getUnreadCount: () => number;
+  notifications: Notification[]
+  preferences: NotificationPreferences
+  pushSubscription: PushSubscription | null
+  addNotification: (notification: NotificationPayload) => void
+  markAsRead: (id: string) => void
+  markAllAsRead: () => void
+  deleteNotification: (id: string) => void
+  clearAll: () => void
+  updatePreferences: (preferences: Partial<NotificationPreferences>) => void
+  setPushSubscription: (subscription: PushSubscription | null) => void
+  getUnreadCount: () => number
+  requestBrowserPermission: () => Promise<NotificationPermission>
+  showBrowserNotification: (title: string, body: string, tag?: string) => void
 }
 
 const defaultPreferences: NotificationPreferences = {
@@ -50,7 +65,7 @@ const defaultPreferences: NotificationPreferences = {
   memberJoined: true,
   cycleCompleted: true,
   announcements: true,
-};
+}
 
 export const useNotifications = create<NotificationState>()(
   persist(
@@ -59,17 +74,18 @@ export const useNotifications = create<NotificationState>()(
       preferences: defaultPreferences,
       pushSubscription: null,
 
-      addNotification: (notification) => {
-        const newNotification: Notification = {
-          ...notification,
-          id: `${Date.now()}-${Math.random()}`,
-          timestamp: Date.now(),
-          read: false,
-        };
+      addNotification: (payload: NotificationPayload) => {
+        const notification: Notification = { ...payload, read: false }
 
         set((state) => ({
-          notifications: [newNotification, ...state.notifications].slice(0, 100),
-        }));
+          notifications: [notification, ...state.notifications].slice(0, 100),
+        }))
+
+        // Show browser notification if permitted and preference enabled
+        const { preferences, showBrowserNotification } = get()
+        if (preferences.inApp) {
+          showBrowserNotification(payload.title, payload.message, payload.id)
+        }
       },
 
       markAsRead: (id) => {
@@ -77,37 +93,62 @@ export const useNotifications = create<NotificationState>()(
           notifications: state.notifications.map((n) =>
             n.id === id ? { ...n, read: true } : n
           ),
-        }));
+        }))
       },
 
       markAllAsRead: () => {
         set((state) => ({
           notifications: state.notifications.map((n) => ({ ...n, read: true })),
-        }));
+        }))
       },
 
       deleteNotification: (id) => {
         set((state) => ({
           notifications: state.notifications.filter((n) => n.id !== id),
-        }));
+        }))
       },
 
-      clearAll: () => {
-        set({ notifications: [] });
-      },
+      clearAll: () => set({ notifications: [] }),
 
       updatePreferences: (preferences) => {
         set((state) => ({
           preferences: { ...state.preferences, ...preferences },
-        }));
+        }))
       },
 
-      setPushSubscription: (subscription) => {
-        set({ pushSubscription: subscription });
+      setPushSubscription: (subscription) => set({ pushSubscription: subscription }),
+
+      getUnreadCount: () => get().notifications.filter((n) => !n.read).length,
+
+      requestBrowserPermission: async () => {
+        if (typeof window === 'undefined' || !('Notification' in window)) {
+          return 'denied'
+        }
+        if (Notification.permission === 'default') {
+          return Notification.requestPermission()
+        }
+        return Notification.permission
       },
 
-      getUnreadCount: () => {
-        return get().notifications.filter((n) => !n.read).length;
+      showBrowserNotification: (title, body, tag) => {
+        if (
+          typeof window === 'undefined' ||
+          !('Notification' in window) ||
+          Notification.permission !== 'granted' ||
+          document.visibilityState === 'visible'
+        ) {
+          return
+        }
+        try {
+          new Notification(title, {
+            body,
+            tag,
+            icon: '/icon-192.png',
+            badge: '/icon-192.png',
+          })
+        } catch {
+          // Notification API may be blocked in some contexts
+        }
       },
     }),
     {
@@ -118,4 +159,4 @@ export const useNotifications = create<NotificationState>()(
       }),
     }
   )
-);
+)

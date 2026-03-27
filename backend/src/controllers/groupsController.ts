@@ -2,8 +2,9 @@ import { Request, Response, NextFunction } from 'express'
 import { SorobanService } from '../services/sorobanService'
 import { NotFoundError } from '../errors/AppError'
 import { asyncHandler } from '../middleware/errorHandler'
-
-const sorobanService = new SorobanService()
+import { gamificationService } from '../services/gamification/GamificationService'
+import { notificationService } from '../services/notificationService'
+import { logger } from '../utils/logger'
 
 /**
  * Parses and validates `?page` and `?limit` query parameters.
@@ -24,13 +25,19 @@ function parsePagination(query: Request['query']): { page: number; limit: number
 }
 
 export class GroupsController {
+  private sorobanService: SorobanService
+
+  constructor(sorobanService?: SorobanService) {
+    this.sorobanService = sorobanService || new SorobanService()
+  }
+
   /**
    * GET /api/groups?page=1&limit=20
    * Returns a paginated list of all groups.
    */
   listGroups = asyncHandler(async (req: Request, res: Response, _next: NextFunction) => {
     const pagination = parsePagination(req.query)
-    const result = await sorobanService.getAllGroups(pagination)
+    const result = await this.sorobanService.getAllGroups(pagination)
 
     res.json({
       success: true,
@@ -41,7 +48,7 @@ export class GroupsController {
 
   getGroup = asyncHandler(async (req: Request, res: Response, _next: NextFunction) => {
     const { id } = req.params
-    const group = await sorobanService.getGroup(id)
+    const group = await this.sorobanService.getGroup(id)
 
     if (!group) {
       throw new NotFoundError('Group', id)
@@ -58,7 +65,7 @@ export class GroupsController {
    */
   createGroup = asyncHandler(async (req: Request, res: Response, _next: NextFunction) => {
     const groupData = req.body // Already validated by middleware
-    const result = await sorobanService.createGroup(groupData)
+    const result = await this.sorobanService.createGroup(groupData)
 
     // Phase 1: return XDR for client signing
     if (result.unsignedXdr) {
@@ -79,7 +86,26 @@ export class GroupsController {
   joinGroup = asyncHandler(async (req: Request, res: Response, _next: NextFunction) => {
     const { id } = req.params
     const { publicKey, signedXdr } = req.body // Already validated by middleware
-    const result = await sorobanService.joinGroup(id, publicKey, signedXdr)
+    const result = await this.sorobanService.joinGroup(id, publicKey, signedXdr)
+
+    // Notify existing group members when someone joins (Phase 2 only)
+    if (result.txHash && publicKey) {
+      try {
+        await notificationService.sendToGroup(
+          id,
+          {
+            type: 'member_joined',
+            title: 'New member joined',
+            message: `A new member has joined your savings group.`,
+            actionUrl: `/groups/${id}`,
+          },
+          publicKey // exclude the joiner themselves
+        )
+      } catch (err) {
+        logger.error('Failed to send member_joined notification', { err })
+      }
+    }
+
     res.json({ success: true, data: result })
   })
 
@@ -92,13 +118,36 @@ export class GroupsController {
   contribute = asyncHandler(async (req: Request, res: Response, _next: NextFunction) => {
     const { id } = req.params
     const { amount, publicKey, signedXdr } = req.body // Already validated by middleware
-    const result = await sorobanService.contribute(id, publicKey, amount, signedXdr)
+    const result = await this.sorobanService.contribute(id, publicKey, amount, signedXdr)
+
+    // Award gamification points for contribution (only on successful submission)
+    if (result.txHash && publicKey) {
+      try {
+        await gamificationService.handleContribution(publicKey, result.txHash)
+      } catch (error) {
+        logger.error('Failed to update gamification', { error, publicKey, txHash: result.txHash })
+      }
+
+      // Notify the contributor
+      try {
+        notificationService.sendToUser(publicKey, {
+          type: 'contribution_received',
+          title: 'Contribution confirmed',
+          message: `Your contribution to the group has been recorded on-chain.`,
+          groupId: id,
+          actionUrl: `/groups/${id}`,
+        })
+      } catch (err) {
+        logger.error('Failed to send contribution_received notification', { err })
+      }
+    }
+
     res.json({ success: true, data: result })
   })
 
   getMembers = asyncHandler(async (req: Request, res: Response, _next: NextFunction) => {
     const { id } = req.params
-    const members = await sorobanService.getGroupMembers(id)
+    const members = await this.sorobanService.getGroupMembers(id)
     res.json({ success: true, data: members })
   })
 
@@ -109,7 +158,7 @@ export class GroupsController {
   getTransactions = asyncHandler(async (req: Request, res: Response, _next: NextFunction) => {
     const { id } = req.params
     const pagination = parsePagination(req.query)
-    const result = await sorobanService.getGroupTransactions(id, pagination)
+    const result = await this.sorobanService.getGroupTransactions(id, pagination)
 
     res.json({
       success: true,

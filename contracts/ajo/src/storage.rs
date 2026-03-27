@@ -45,14 +45,29 @@ pub enum StorageKey {
     /// Stored in persistent storage under `("PENPOOL", group_id, cycle)`.
     CyclePenaltyPool(u64, u32),
 
-    /// Dispute data keyed by numeric ID.
-    Dispute(u64),
+    /// Insurance pool for a specific token.
+    /// Stored in instance storage under `("INSPOOL", token_address)`.
+    InsurancePool(Address),
 
-    /// Dispute vote by voter for specific dispute.
-    DisputeVote(u64, Address),
+    /// Insurance claim keyed by ID.
+    /// Stored in persistent storage under `("INSCLAIM", claim_id)`.
+    InsuranceClaim(u64),
 
-    /// List of dispute IDs for a group.
-    GroupDisputeIds(u64),
+    /// Global insurance claim counter.
+    /// Stored in instance storage under `"ICONT"`.
+    ClaimCounter,
+
+    /// Group milestones list.
+    /// Stored in persistent storage under `("GMILE", group_id)`.
+    GroupMilestones(u64),
+
+    /// Member achievements list.
+    /// Stored in persistent storage under `("MACHIEV", member)`.
+    MemberAchievements(Address),
+
+    /// Aggregated member statistics.
+    /// Stored in persistent storage under `("MSTATS", member)`.
+    MemberStatsData(Address),
 }
 
 impl StorageKey {
@@ -78,9 +93,12 @@ impl StorageKey {
             StorageKey::ContributionDetail(_, _, _) => symbol_short!("CONTREC"),
             StorageKey::MemberPenalty(_, _) => symbol_short!("PENALTY"),
             StorageKey::CyclePenaltyPool(_, _) => symbol_short!("PENPOOL"),
-            StorageKey::Dispute(_) => symbol_short!("DISPUTE"),
-            StorageKey::DisputeVote(_, _) => symbol_short!("DISPVOTE"),
-            StorageKey::GroupDisputeIds(_) => symbol_short!("DISPGIDS"),
+            StorageKey::InsurancePool(_) => symbol_short!("INSPOOL"),
+            StorageKey::InsuranceClaim(_) => symbol_short!("INSCLAIM"),
+            StorageKey::ClaimCounter => symbol_short!("ICONT"),
+            StorageKey::GroupMilestones(_) => symbol_short!("GMILE"),
+            StorageKey::MemberAchievements(_) => symbol_short!("MACHIEV"),
+            StorageKey::MemberStatsData(_) => symbol_short!("MSTATS"),
         }
     }
 }
@@ -480,7 +498,11 @@ pub fn store_refund_vote(
 ///
 /// # Returns
 /// `Some(RefundVote)` if the member has voted, `None` otherwise
-pub fn get_refund_vote(env: &Env, group_id: u64, member: &Address) -> Option<crate::types::RefundVote> {
+pub fn get_refund_vote(
+    env: &Env,
+    group_id: u64,
+    member: &Address,
+) -> Option<crate::types::RefundVote> {
     let key = (symbol_short!("REFVOTE"), group_id, member);
     env.storage().persistent().get(&key)
 }
@@ -534,78 +556,307 @@ pub fn get_refund_record(
     env.storage().persistent().get(&key)
 }
 
-/// Returns the next available dispute ID and atomically increments the counter.
-///
-pub fn get_next_dispute_id(env: &Env) -> u64 {
-    let key = symbol_short!("DCOUNTER");
+/// Stores the insurance pool for a token.
+pub fn store_insurance_pool(env: &Env, token: &Address, pool: &crate::types::InsurancePool) {
+    let key = (symbol_short!("INSPOOL"), token);
+    env.storage().instance().set(&key, pool);
+}
+
+/// Retrieves the insurance pool for a token.
+pub fn get_insurance_pool(env: &Env, token: &Address) -> Option<crate::types::InsurancePool> {
+    let key = (symbol_short!("INSPOOL"), token);
+    env.storage().instance().get(&key)
+}
+
+/// Returns next available claim ID.
+pub fn get_next_claim_id(env: &Env) -> u64 {
+    let key = symbol_short!("ICONT");
     let current: u64 = env.storage().instance().get(&key).unwrap_or(0);
     let next = current + 1;
     env.storage().instance().set(&key, &next);
     next
 }
 
-/// Stores a Dispute to persistent storage.
-pub fn store_dispute(env: &Env, dispute_id: u64, dispute: &crate::types::Dispute) {
-    let key = (symbol_short!("DISPUTE"), dispute_id);
-    env.storage().persistent().set(&key, dispute);
+/// Stores an insurance claim.
+pub fn store_insurance_claim(env: &Env, claim_id: u64, claim: &crate::types::InsuranceClaim) {
+    let key = (symbol_short!("INSCLAIM"), claim_id);
+    env.storage().persistent().set(&key, claim);
 }
 
-/// Retrieves a Dispute from persistent storage.
-pub fn get_dispute(env: &Env, dispute_id: u64) -> Option<crate::types::Dispute> {
-    let key = (symbol_short!("DISPUTE"), dispute_id);
+/// Retrieves an insurance claim.
+pub fn get_insurance_claim(env: &Env, claim_id: u64) -> Option<crate::types::InsuranceClaim> {
+    let key = (symbol_short!("INSCLAIM"), claim_id);
     env.storage().persistent().get(&key)
 }
 
-/// Stores a DisputeVote.
-pub fn store_dispute_vote(
+// ── Payout-ordering helpers ───────────────────────────────────────────────────
+
+/// Returns `true` if the given member has already received their payout for a group.
+///
+/// This is the read-side counterpart of [`mark_payout_received`].
+pub fn has_received_payout(env: &Env, group_id: u64, member: &Address) -> bool {
+    let key = (symbol_short!("PAYOUT"), group_id, member);
+    env.storage().persistent().get(&key).unwrap_or(false)
+}
+
+/// Stores a payout vote cast by `voter` for `nominee` in `cycle`.
+///
+/// Keyed per voter so each member can cast at most one vote per cycle.
+pub fn store_payout_vote(
     env: &Env,
-    dispute_id: u64,
+    group_id: u64,
+    cycle: u32,
     voter: &Address,
-    vote: &crate::types::DisputeVote,
+    vote: &crate::types::PayoutVote,
 ) {
-    let key = (symbol_short!("DISPVOTE"), dispute_id, voter);
+    let key = (symbol_short!("PVOTE"), group_id, cycle, voter);
     env.storage().persistent().set(&key, vote);
 }
 
-/// Checks if voter has voted on dispute.
-pub fn has_voted_on_dispute(env: &Env, dispute_id: u64, voter: &Address) -> bool {
-    let key = (symbol_short!("DISPVOTE"), dispute_id, voter);
-    env.storage().persistent().has(&key)
-}
-
-/// Retrieves a DisputeVote.
-pub fn get_dispute_vote(
+/// Retrieves the payout vote cast by `voter` for `cycle`, if any.
+pub fn get_payout_vote(
     env: &Env,
-    dispute_id: u64,
+    group_id: u64,
+    cycle: u32,
     voter: &Address,
-) -> Option<crate::types::DisputeVote> {
-    let key = (symbol_short!("DISPVOTE"), dispute_id, voter);
+) -> Option<crate::types::PayoutVote> {
+    let key = (symbol_short!("PVOTE"), group_id, cycle, voter);
     env.storage().persistent().get(&key)
 }
 
-/// Stores/updates group dispute IDs list (append).
-pub fn store_group_dispute_id(env: &Env, group_id: u64, dispute_id: u64) {
-    let key = (symbol_short!("DISPGIDS"), group_id);
-    let mut ids: Vec<u64> = env.storage().persistent().get(&key).unwrap_or_else(Vec::new);
-    ids.push_back(dispute_id);
-    env.storage().persistent().set(&key, &ids);
+/// Returns `true` if `voter` has already submitted a payout vote for `cycle`.
+pub fn has_voted_for_payout(env: &Env, group_id: u64, cycle: u32, voter: &Address) -> bool {
+    let key = (symbol_short!("PVOTE"), group_id, cycle, voter);
+    env.storage().persistent().has(&key)
 }
 
-/// Retrieves dispute IDs for group.
-pub fn get_group_dispute_ids(env: &Env, group_id: u64) -> Vec<u64> {
-    let key = (symbol_short!("DISPGIDS"), group_id);
-    env.storage().persistent().get(&key).unwrap_or_else(Vec::new)
+/// Persists the determined [`PayoutOrder`](crate::types::PayoutOrder) for a cycle.
+pub fn store_payout_order(env: &Env, group_id: u64, cycle: u32, order: &crate::types::PayoutOrder) {
+    let key = (symbol_short!("PORDER"), group_id, cycle);
+    env.storage().persistent().set(&key, order);
 }
 
-/// Retrieves all Disputes for a group by iterating IDs.
-pub fn get_group_disputes(env: &Env, group_id: u64) -> Vec<crate::types::Dispute> {
-    let mut disputes = Vec::new(env);
-    let ids = get_group_dispute_ids(env, group_id);
-    for id in ids.iter() {
-        if let Some(dispute) = get_dispute(env, *id) {
-            disputes.push_back(dispute);
-        }
-    }
-    disputes
+/// Retrieves the committed payout order for a cycle, if one has been recorded.
+pub fn get_payout_order(env: &Env, group_id: u64, cycle: u32) -> Option<crate::types::PayoutOrder> {
+    let key = (symbol_short!("PORDER"), group_id, cycle);
+    env.storage().persistent().get(&key)
 }
 
+// ── Contribution reminder helpers ─────────────────────────────────────────────
+
+/// Stores a member's notification preferences in persistent storage.
+///
+/// Keyed by member address so each member has exactly one preferences record
+/// that applies across all groups.
+pub fn store_notification_preferences(
+    env: &Env,
+    member: &Address,
+    prefs: &crate::types::MemberNotificationPreferences,
+) {
+    let key = (symbol_short!("NOTPREF"), member);
+    env.storage().persistent().set(&key, prefs);
+}
+
+/// Retrieves a member's notification preferences, if set.
+pub fn get_notification_preferences(
+    env: &Env,
+    member: &Address,
+) -> Option<crate::types::MemberNotificationPreferences> {
+    let key = (symbol_short!("NOTPREF"), member);
+    env.storage().persistent().get(&key)
+}
+
+/// Stores a reminder record for a specific group, cycle, and member.
+///
+/// Uses a composite key so the latest reminder per member per cycle is retained.
+pub fn store_reminder_record(
+    env: &Env,
+    group_id: u64,
+    cycle: u32,
+    member: &Address,
+    record: &crate::types::ReminderRecord,
+) {
+    let key = (symbol_short!("REMIND"), group_id, cycle, member);
+    env.storage().persistent().set(&key, record);
+}
+
+/// Retrieves the most recent reminder record for a member in a given cycle.
+pub fn get_reminder_record(
+    env: &Env,
+    group_id: u64,
+    cycle: u32,
+    member: &Address,
+) -> Option<crate::types::ReminderRecord> {
+    let key = (symbol_short!("REMIND"), group_id, cycle, member);
+    env.storage().persistent().get(&key)
+}
+// ── Milestone & achievement storage ───────────────────────────────────────
+
+/// Stores group milestones list.
+pub fn store_group_milestones(
+    env: &Env,
+    group_id: u64,
+    milestones: &Vec<crate::types::MilestoneRecord>,
+) {
+    let key = (symbol_short!("GMILE"), group_id);
+    env.storage().persistent().set(&key, milestones);
+}
+
+/// Retrieves group milestones.
+pub fn get_group_milestones(
+    env: &Env,
+    group_id: u64,
+) -> Option<Vec<crate::types::MilestoneRecord>> {
+    let key = (symbol_short!("GMILE"), group_id);
+    env.storage().persistent().get(&key)
+}
+
+/// Adds a single milestone to a group's milestone list.
+pub fn add_group_milestone(env: &Env, group_id: u64, record: &crate::types::MilestoneRecord) {
+    let mut milestones = get_group_milestones(env, group_id).unwrap_or_else(|| Vec::new(env));
+    milestones.push_back(record.clone());
+    store_group_milestones(env, group_id, &milestones);
+}
+
+/// Stores member achievements list.
+pub fn store_member_achievements(
+    env: &Env,
+    member: &Address,
+    achievements: &Vec<crate::types::AchievementRecord>,
+) {
+    let key = (symbol_short!("MACHIEV"), member);
+    env.storage().persistent().set(&key, achievements);
+}
+
+/// Retrieves member achievements.
+pub fn get_member_achievements(
+    env: &Env,
+    member: &Address,
+) -> Option<Vec<crate::types::AchievementRecord>> {
+    let key = (symbol_short!("MACHIEV"), member);
+    env.storage().persistent().get(&key)
+}
+
+/// Adds a single achievement to a member's list.
+pub fn add_member_achievement(
+    env: &Env,
+    member: &Address,
+    record: &crate::types::AchievementRecord,
+) {
+    let mut achievements = get_member_achievements(env, member).unwrap_or_else(|| Vec::new(env));
+    achievements.push_back(record.clone());
+    store_member_achievements(env, member, &achievements);
+}
+
+/// Stores aggregated member statistics.
+pub fn store_member_stats(env: &Env, member: &Address, stats: &crate::types::MemberStats) {
+    let key = (symbol_short!("MSTATS"), member);
+    env.storage().persistent().set(&key, stats);
+}
+
+/// Retrieves aggregated member statistics.
+pub fn get_member_stats(env: &Env, member: &Address) -> Option<crate::types::MemberStats> {
+    let key = (symbol_short!("MSTATS"), member);
+    env.storage().persistent().get(&key)
+}
+
+// ── Group access control storage ──────────────────────────────────────────
+
+/// Stores an invitation for a member to join a group.
+pub fn store_invitation(
+    env: &Env,
+    group_id: u64,
+    invitee: &Address,
+    invitation: &crate::types::GroupInvitation,
+) {
+    let key = (symbol_short!("INVITE"), group_id, invitee);
+    env.storage().persistent().set(&key, invitation);
+}
+
+/// Retrieves an invitation for a member to join a group.
+pub fn get_invitation(
+    env: &Env,
+    group_id: u64,
+    invitee: &Address,
+) -> Option<crate::types::GroupInvitation> {
+    let key = (symbol_short!("INVITE"), group_id, invitee);
+    env.storage().persistent().get(&key)
+}
+
+// ── Multi-token storage ───────────────────────────────────────────────────
+
+/// Stores the multi-token configuration for a group.
+pub fn store_multi_token_config(
+    env: &Env,
+    group_id: u64,
+    config: &crate::types::MultiTokenConfig,
+) {
+    let key = (symbol_short!("MTCONF"), group_id);
+    env.storage().persistent().set(&key, config);
+}
+
+/// Retrieves the multi-token configuration for a group.
+///
+/// Returns `None` for single-token groups (those created via `create_group`).
+pub fn get_multi_token_config(
+    env: &Env,
+    group_id: u64,
+) -> Option<crate::types::MultiTokenConfig> {
+    let key = (symbol_short!("MTCONF"), group_id);
+    env.storage().persistent().get(&key)
+}
+
+/// Returns `true` if a group has multi-token configuration.
+pub fn is_multi_token_group(env: &Env, group_id: u64) -> bool {
+    let key = (symbol_short!("MTCONF"), group_id);
+    env.storage().persistent().has(&key)
+}
+
+/// Stores a token-specific contribution record for a member in a cycle.
+pub fn store_token_contribution(
+    env: &Env,
+    group_id: u64,
+    cycle: u32,
+    member: &Address,
+    record: &crate::types::TokenContribution,
+) {
+    let key = (symbol_short!("TKCONT"), group_id, cycle, member);
+    env.storage().persistent().set(&key, record);
+}
+
+/// Retrieves the token-specific contribution record for a member in a cycle.
+pub fn get_token_contribution(
+    env: &Env,
+    group_id: u64,
+    cycle: u32,
+    member: &Address,
+) -> Option<crate::types::TokenContribution> {
+    let key = (symbol_short!("TKCONT"), group_id, cycle, member);
+    env.storage().persistent().get(&key)
+}
+
+/// Tracks per-token balance accumulated in a group for a given cycle.
+///
+/// This is used during payout to know how much of each token is available.
+pub fn add_group_token_balance(
+    env: &Env,
+    group_id: u64,
+    cycle: u32,
+    token: &Address,
+    amount: i128,
+) {
+    let key = (symbol_short!("GTBAL"), group_id, cycle, token);
+    let current: i128 = env.storage().persistent().get(&key).unwrap_or(0);
+    env.storage().persistent().set(&key, &(current + amount));
+}
+
+/// Retrieves the accumulated token balance for a group in a given cycle.
+pub fn get_group_token_balance(
+    env: &Env,
+    group_id: u64,
+    cycle: u32,
+    token: &Address,
+) -> i128 {
+    let key = (symbol_short!("GTBAL"), group_id, cycle, token);
+    env.storage().persistent().get(&key).unwrap_or(0)
+}

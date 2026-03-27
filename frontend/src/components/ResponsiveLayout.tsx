@@ -24,11 +24,9 @@ export const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
       {/* Main Layout with Sidebar */}
       <div className="flex flex-1">
         <Sidebar currentView={currentView} onNavigate={onNavigate} />
-        
-        <main className="flex-1 p-4 sm:p-6 lg:p-8">
-          <div className="max-w-7xl mx-auto">
-            {children}
-          </div>
+
+        <main className="flex-1 p-4 pb-24 sm:p-6 md:pb-6 lg:p-8">
+          <div className="max-w-7xl mx-auto">{children}</div>
         </main>
       </div>
 

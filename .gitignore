@@ -42,10 +42,33 @@ coverage/
 *.profraw
 *.profdata
 
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+*~
+
+# Debug files
+*debug*.js
+test-*.js
+!*.test.js
+!*.spec.js
+
+# Large binary files
+*.deb
+*.rpm
+*.dmg
+*.exe
+*.msi
+
 # System
 Thumbs.db
 .cache/
+.DS_Store
 
 # Kiro (allow specs to be tracked)
-.kiro/*
+.kiro/
 !.kiro/specs/
+.vercel

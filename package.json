@@ -21,7 +21,7 @@
     "type-check:frontend": "cd frontend && npm run type-check",
     "type-check:backend": "cd backend && npm run type-check",
     "test:contracts": "cd contracts/ajo && cargo test",
-    "prepare": "husky install",
+    "prepare": "npx husky install",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,yml,yaml}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,yml,yaml}\""
   },

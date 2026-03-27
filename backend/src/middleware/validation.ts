@@ -1,18 +1,36 @@
 import { Request, Response, NextFunction } from 'express'
-import { z, ZodError, ZodSchema } from 'zod'
+import { z, ZodError, ZodSchema, AnyZodObject } from 'zod'
 
 /**
- * Validation middleware factory
+ * Validation middleware factory (backward compatible single-source version)
  * Creates middleware that validates request data against a Zod schema
  */
-export function validateRequest(schema: ZodSchema, source: 'body' | 'query' | 'params' = 'body') {
+export function validateRequest(
+  schema: ZodSchema | { body?: AnyZodObject; query?: AnyZodObject; params?: AnyZodObject },
+  source?: 'body' | 'query' | 'params'
+) {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const data = req[source]
-      const validated = await schema.parseAsync(data)
-
-      // Replace the request data with validated data
-      req[source] = validated
+      // Handle new multi-source validation format
+      if (typeof schema === 'object' && !('parseAsync' in schema)) {
+        const schemaObj = schema as { body?: AnyZodObject; query?: AnyZodObject; params?: AnyZodObject }
+        
+        if (schemaObj.body) {
+          req.body = await schemaObj.body.parseAsync(req.body)
+        }
+        if (schemaObj.query) {
+          req.query = await schemaObj.query.parseAsync(req.query)
+        }
+        if (schemaObj.params) {
+          req.params = await schemaObj.params.parseAsync(req.params)
+        }
+      } else {
+        // Handle legacy single-source validation
+        const sourceToValidate = source || 'body'
+        const data = req[sourceToValidate]
+        const validated = await (schema as ZodSchema).parseAsync(data)
+        req[sourceToValidate] = validated
+      }
 
       next()
     } catch (error) {
@@ -97,5 +115,7 @@ export function safeParse<T>(schema: ZodSchema<T>, data: unknown):
   | { success: true; data: T }
   | { success: false; error: ZodError } {
   const result = schema.safeParse(data)
-  return result
+  return result as
+    | { success: true; data: T }
+    | { success: false; error: ZodError }
 }

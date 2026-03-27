@@ -5,6 +5,7 @@ import { Providers } from './providers'
 import { AppLayout } from '@/components/AppLayout'
 import { InstallPrompt } from '@/components/InstallPrompt'
 import { OfflineIndicator } from '@/components/OfflineIndicator'
+import { OnboardingFlow } from '@/components/onboarding'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -72,11 +73,27 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="Ajo" />
+        {/* Issue #321: Prevent flash of wrong theme on load */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  var stored = localStorage.getItem('soroban-ajo-theme');
+                  var theme = stored === 'dark' || stored === 'light' ? stored
+                    : window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+                  document.documentElement.classList.add(theme);
+                } catch(e) {}
+              })();
+            `,
+          }}
+        />
       </head>
       <body className={inter.className}>
         <div className="pattern-overlay gradient-mesh min-h-screen">
           <Providers>
             <AppLayout>{children}</AppLayout>
+            <OnboardingFlow />
             <InstallPrompt />
             <OfflineIndicator />
           </Providers>

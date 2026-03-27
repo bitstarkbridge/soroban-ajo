@@ -14,6 +14,7 @@ interface OnboardingState {
   skipOnboarding: () => void;
   completeOnboarding: () => void;
   replayTutorial: () => void;
+  startOnboardingIfNew: () => void;
   nextStep: () => void;
   prevStep: () => void;
 }
@@ -57,6 +58,13 @@ export const useOnboarding = create<OnboardingState>()(
           isOnboardingActive: true,
           isTourActive: true,
           currentStep: 0,
+        }),
+
+      // Call on app mount — only activates if user hasn't completed onboarding yet
+      startOnboardingIfNew: () =>
+        set((state) => {
+          if (state.hasCompletedOnboarding) return {};
+          return { isOnboardingActive: true, currentStep: 0 };
         }),
 
       nextStep: () => set((state) => ({ currentStep: state.currentStep + 1 })),

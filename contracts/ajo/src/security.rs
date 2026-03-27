@@ -163,7 +163,7 @@ pub fn calculate_payout_amount(group: &Group) -> i128 {
 /// - Large withdrawal amounts
 pub fn check_transaction_pattern(group: &Group) -> bool {
     // Check for reasonable member count
-    if group.members.len() > limits::MAX_MEMBERS as usize {
+    if group.members.len() > limits::MAX_MEMBERS {
         return false;
     }
     
@@ -304,9 +304,12 @@ pub fn validate_payout(env: &Env, group: &Group, recipient: &Address) -> Result<
         return Err(AjoError::NotMember);
     }
     
-    // Check if recipient already received payout
-    if crate::storage::has_received_payout(env, group.id, recipient) {
-        return Err(AjoError::AlreadyReceivedPayout);
+    // Check if recipient already received payout by checking if their index is less than payout_index
+    let recipient_index = group.members.iter().position(|m| m == *recipient);
+    if let Some(idx) = recipient_index {
+        if (idx as u32) < group.payout_index {
+            return Err(AjoError::AlreadyReceivedPayout);
+        }
     }
     
     Ok(())

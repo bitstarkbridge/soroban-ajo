@@ -1,6 +1,9 @@
 import * as StellarSdk from 'stellar-sdk'
+import { createModuleLogger } from '../utils/logger'
+import { ErrorReporter } from '../utils/errorReporter'
+import * as Sentry from '@sentry/node'
 
- 
+const logger = createModuleLogger('SorobanService')
 
 export interface PaginationParams {
   page: number
@@ -18,7 +21,6 @@ export interface PaginatedResult<T> {
     hasPrevPage: boolean
   }
 }
-
 
 // Domain types
 
@@ -52,29 +54,20 @@ export interface GroupTransaction {
   ledger: number
 }
 
-
 // Errors
 
-
 export class SorobanServiceError extends Error {
-  constructor(
-    message: string,
-    public readonly code: string,
-    public readonly cause?: unknown
-  ) {
+  constructor(message: string, public readonly code: string, public readonly cause?: unknown) {
     super(message)
     this.name = 'SorobanServiceError'
   }
 }
 
-
 // Helpers
 
+// Applies in-memory pagination to a dataset.
+// Swap for native contract-level cursors once the contract supports them.
 
-
-  // Applies in-memory pagination to a dataset.
-  // Swap for native contract-level cursors once the contract supports them.
- 
 function paginate<T>(items: T[], { page, limit }: PaginationParams): PaginatedResult<T> {
   const total = items.length
   const totalPages = Math.ceil(total / limit) || 0
@@ -93,10 +86,9 @@ function paginate<T>(items: T[], { page, limit }: PaginationParams): PaginatedRe
   }
 }
 
+// Polls the RPC node until the submitted transaction reaches a terminal
+//  status (SUCCESS | FAILED) or the timeout elapses.
 
-  // Polls the RPC node until the submitted transaction reaches a terminal
-  //  status (SUCCESS | FAILED) or the timeout elapses.
- 
 async function pollForConfirmation(
   server: StellarSdk.SorobanRpc.Server,
   hash: string,
@@ -121,9 +113,9 @@ async function pollForConfirmation(
   )
 }
 
-  //  Decodes a single ScVal into a plain string.
-  //  Handles the most common Soroban scalar types.
- 
+//  Decodes a single ScVal into a plain string.
+//  Handles the most common Soroban scalar types.
+
 function scValToString(val: StellarSdk.xdr.ScVal): string {
   switch (val.switch().name) {
     case 'scvString':
@@ -201,9 +193,7 @@ function mapToTransaction(raw: Record<string, string>): GroupTransaction {
   }
 }
 
-
 // Service
-
 
 export class SorobanService {
   private readonly server: StellarSdk.SorobanRpc.Server
@@ -212,16 +202,20 @@ export class SorobanService {
   private readonly contract: StellarSdk.Contract
 
   constructor() {
-    this.contractId = process.env.SOROBAN_CONTRACT_ID || ''
-    this.networkPassphrase = process.env.SOROBAN_NETWORK_PASSPHRASE || StellarSdk.Networks.TESTNET
-
+    const contractId = process.env.SOROBAN_CONTRACT_ID || ''
+    const networkPassphrase = process.env.SOROBAN_NETWORK_PASSPHRASE || StellarSdk.Networks.TESTNET
     const rpcUrl = process.env.SOROBAN_RPC_URL || 'https://soroban-testnet.stellar.org'
 
+    this.contractId = contractId
+    this.networkPassphrase = networkPassphrase
     this.server = new StellarSdk.SorobanRpc.Server(rpcUrl)
     this.contract = new StellarSdk.Contract(this.contractId)
 
     if (!this.contractId) {
-      console.warn('[SorobanService] SOROBAN_CONTRACT_ID is not set. Contract calls will fail.')
+      logger.warn('SOROBAN_CONTRACT_ID is not set. Contract calls will fail.', {
+        rpcUrl,
+        networkPassphrase: this.networkPassphrase,
+      })
     }
   }
 
@@ -338,11 +332,25 @@ export class SorobanService {
     } = groupData
 
     if (signedXdr) {
-      const { hash, result } = await this.submitSignedXdr(signedXdr)
-      const groupId =
-        result.returnValue?.str()?.toString() ?? result.returnValue?.sym()?.toString() ?? hash
-      return { groupId, txHash: hash }
+      try {
+        const { hash, result } = await this.submitSignedXdr(signedXdr)
+        const groupId =
+          result.returnValue?.str()?.toString() ?? result.returnValue?.sym()?.toString() ?? hash
+        return { groupId, txHash: hash }
+      } catch (error) {
+        ErrorReporter.captureException(error as Error, {
+          method: 'createGroup',
+          signedXdr,
+        })
+        throw error
+      }
     }
+
+    ErrorReporter.addBreadcrumb({
+      message: 'Building createGroup transaction',
+      category: 'soroban',
+      data: { name, adminPublicKey },
+    })
 
     const args: StellarSdk.xdr.ScVal[] = [
       StellarSdk.nativeToScVal(name, { type: 'string' }),
@@ -353,8 +361,16 @@ export class SorobanService {
       new StellarSdk.Address(adminPublicKey).toScVal(),
     ]
 
-    const unsignedXdr = await this.buildUnsignedTransaction(adminPublicKey, 'create_group', args)
-    return { unsignedXdr }
+    try {
+      const unsignedXdr = await this.buildUnsignedTransaction(adminPublicKey, 'create_group', args)
+      return { unsignedXdr }
+    } catch (error) {
+      ErrorReporter.captureException(error as Error, {
+        method: 'createGroup',
+        args: { name, adminPublicKey },
+      })
+      throw error
+    }
   }
 
   /**

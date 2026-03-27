@@ -9,6 +9,7 @@
 import React from 'react'
 import { useRouter } from 'next/navigation'
 import { useDashboard } from '@/hooks/useDashboard'
+import { GamificationDashboard } from '@/components/GamificationDashboard'
 import { GroupsGrid } from '@/components/GroupsGrid'
 import { GroupsList } from '@/components/GroupsList'
 import { UserGroupsDashboard } from '@/components/UserGroupsDashboard'
@@ -111,6 +112,10 @@ export default function Dashboard() {
             />
           </div>
         )}
+
+        <div className="animate-fade-in-up" style={{ animationDelay: '75ms' }}>
+          <GamificationDashboard walletAddress={address || userAddress || undefined} />
+        </div>
 
         {/* Controls Bar — unchanged */}
         <div className="mb-6 space-y-4 animate-fade-in-up" style={{ animationDelay: '100ms' }}>

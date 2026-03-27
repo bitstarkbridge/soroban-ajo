@@ -1,5 +1,5 @@
 /** Supported Stellar wallet providers */
-export type WalletProvider = 'freighter' | 'albedo' | 'xbull'
+export type WalletProvider = 'freighter' | 'albedo' | 'xbull' | 'lobstr'
 
 /** Network the wallet is connected to */
 export type StellarNetwork = 'testnet' | 'mainnet'

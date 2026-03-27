@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Notification } from '@/hooks/useNotifications';
+import type { Notification } from '@/hooks/useNotifications';
 import { formatDistanceToNow } from 'date-fns';
 import { X, Bell, DollarSign, Users, CheckCircle, Megaphone, AlertCircle } from 'lucide-react';
 
@@ -11,21 +11,27 @@ interface NotificationItemProps {
   onDelete: (id: string) => void;
 }
 
-const iconMap = {
+const iconMap: Record<Notification['type'], React.ElementType> = {
   contribution_due: Bell,
   contribution_overdue: AlertCircle,
+  contribution_received: DollarSign,
   payout_received: DollarSign,
   member_joined: Users,
+  member_left: Users,
   cycle_completed: CheckCircle,
+  group_created: CheckCircle,
   announcement: Megaphone,
 };
 
-const colorMap = {
+const colorMap: Record<Notification['type'], string> = {
   contribution_due: 'bg-blue-100 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400',
   contribution_overdue: 'bg-red-100 text-red-600 dark:bg-red-900/20 dark:text-red-400',
+  contribution_received: 'bg-green-100 text-green-600 dark:bg-green-900/20 dark:text-green-400',
   payout_received: 'bg-green-100 text-green-600 dark:bg-green-900/20 dark:text-green-400',
   member_joined: 'bg-purple-100 text-purple-600 dark:bg-purple-900/20 dark:text-purple-400',
+  member_left: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400',
   cycle_completed: 'bg-teal-100 text-teal-600 dark:bg-teal-900/20 dark:text-teal-400',
+  group_created: 'bg-teal-100 text-teal-600 dark:bg-teal-900/20 dark:text-teal-400',
   announcement: 'bg-orange-100 text-orange-600 dark:bg-orange-900/20 dark:text-orange-400',
 };
 

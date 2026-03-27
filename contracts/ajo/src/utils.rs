@@ -1,6 +1,7 @@
 use soroban_sdk::{Address, Env, Vec};
 
-use crate::types::Group;
+use crate::types::{Group, GroupMilestone, MemberAchievement, PayoutOrder, PayoutOrderingStrategy};
+use crate::errors::AjoError;
 
 /// Returns `true` if `address` appears in the group's `members` list.
 ///
@@ -163,7 +164,349 @@ pub fn is_within_grace_period(group: &crate::types::Group, current_time: u64) ->
     current_time > cycle_end && current_time <= grace_end
 }
 
-/// Returns `true` if `address` is the complainant or defendant in the dispute.
-pub fn is_dispute_member(dispute: &crate::types::Dispute, address: &Address) -> bool {
-    &dispute.complainant == address || &dispute.defendant == address
+// ── Dynamic payout ordering ───────────────────────────────────────────────────
+
+/// Determines and records the next payout recipient according to the group's
+/// [`PayoutOrderingStrategy`].
+///
+/// For [`Sequential`](PayoutOrderingStrategy::Sequential) this reproduces the
+/// original join-order behaviour using `group.payout_index` directly.
+/// For all other strategies it queries eligible members (those who have not yet
+/// received a payout) and applies the relevant selection algorithm.
+///
+/// The result is committed to persistent storage as a [`PayoutOrder`] and
+/// returned so the caller can execute the token transfer immediately.
+///
+/// # Errors
+/// * [`AjoError::NoEligibleMembers`] — all members have already been paid, or
+///   the internal members list is empty.
+/// * [`AjoError::NoMembers`] — used only for Sequential when `payout_index`
+///   points beyond the members list (should never happen in practice).
+pub fn determine_next_recipient(env: &Env, group: &Group) -> Result<Address, AjoError> {
+    let recipient = preview_next_recipient(env, group)?;
+
+    // Persist the determined order for audit / transparency
+    let order = PayoutOrder {
+        group_id: group.id,
+        cycle: group.current_cycle,
+        recipient: recipient.clone(),
+        selection_method: group.payout_strategy,
+        determined_at: get_current_timestamp(env),
+    };
+    crate::storage::store_payout_order(env, group.id, group.current_cycle, &order);
+
+    Ok(recipient)
+}
+
+/// Computes the next recipient using the group's payout strategy without
+/// writing any storage side effects.
+pub fn preview_next_recipient(env: &Env, group: &Group) -> Result<Address, AjoError> {
+    match group.payout_strategy {
+        PayoutOrderingStrategy::Sequential => select_sequential(group),
+        PayoutOrderingStrategy::Random => select_random(env, group),
+        PayoutOrderingStrategy::VotingBased | PayoutOrderingStrategy::NeedBased => {
+            select_by_votes(env, group)
+        }
+        PayoutOrderingStrategy::ContributionBased => select_by_contribution(env, group),
+    }
+}
+
+/// Selects the next recipient by join order (current `payout_index`).
+fn select_sequential(group: &Group) -> Result<Address, AjoError> {
+    group
+        .members
+        .get(group.payout_index)
+        .ok_or(AjoError::NoMembers)
+}
+
+/// Selects a random eligible member using ledger sequence and timestamp as
+/// entropy.  This is *verifiable* but not unpredictable by validators —
+/// acceptable for informal savings groups.
+///
+/// Entropy is mixed with a 64-bit multiplicative hash constant to improve
+/// distribution when the raw seed values are small.
+fn select_random(env: &Env, group: &Group) -> Result<Address, AjoError> {
+    let eligible = get_eligible_members(env, group)?;
+    let len = eligible.len() as u64;
+
+    // Combine ledger sequence and timestamp, then mix bits
+    let raw = (env.ledger().sequence() as u64)
+        .wrapping_add(env.ledger().timestamp())
+        .wrapping_mul(0x9e3779b97f4a7c15_u64); // Fibonacci-hashing constant
+    let index = (raw % len) as u32;
+
+    eligible.get(index).ok_or(AjoError::NoEligibleMembers)
+}
+
+/// Selects the eligible member who received the most votes this cycle.
+/// In the event of a tie the candidate who appears first in `group.members`
+/// wins (deterministic tiebreaker).  If no votes have been cast the
+/// function falls back to the first eligible member in join order so that a
+/// payout can always be executed.
+fn select_by_votes(env: &Env, group: &Group) -> Result<Address, AjoError> {
+    let eligible = get_eligible_members(env, group)?;
+
+    let mut best: Option<Address> = None;
+    let mut best_count: u32 = 0;
+
+    // Iterate over eligible candidates and count votes in O(n²).
+    // Acceptable for groups capped at 100 members.
+    for candidate in eligible.iter() {
+        let mut count: u32 = 0;
+        for voter in group.members.iter() {
+            if let Some(vote) =
+                crate::storage::get_payout_vote(env, group.id, group.current_cycle, &voter)
+            {
+                if vote.nominee == candidate {
+                    count += 1;
+                }
+            }
+        }
+        // Strict greater-than preserves first-encountered candidate on ties.
+        if count > best_count {
+            best_count = count;
+            best = Some(candidate);
+        }
+    }
+
+    // Fall back to first eligible member when nobody has voted yet.
+    best.or_else(|| eligible.get(0)).ok_or(AjoError::NoEligibleMembers)
+}
+
+/// Selects the eligible member with the highest reliability score
+/// (fewest late payments).  In the event of a tie the member who appears
+/// first in `group.members` wins.
+fn select_by_contribution(env: &Env, group: &Group) -> Result<Address, AjoError> {
+    let eligible = get_eligible_members(env, group)?;
+
+    let mut best: Option<Address> = None;
+    let mut best_score: u32 = 0;
+
+    for member in eligible.iter() {
+        let score = crate::storage::get_member_penalty(env, group.id, &member)
+            .map(|r| r.reliability_score)
+            .unwrap_or(100_u32); // 100 = perfect — no penalty record yet
+
+        // Strict greater-than: first member wins ties (preserves join-order fairness).
+        if score > best_score || best.is_none() {
+            best_score = score;
+            best = Some(member);
+        }
+    }
+
+    best.ok_or(AjoError::NoEligibleMembers)
+}
+
+/// Returns the subset of group members who have **not** yet received a payout.
+///
+/// Preserves the original join order of `group.members`.
+fn get_eligible_members(env: &Env, group: &Group) -> Result<Vec<Address>, AjoError> {
+    let mut eligible = Vec::new(env);
+    for member in group.members.iter() {
+        if !crate::storage::has_received_payout(env, group.id, &member) {
+            eligible.push_back(member);
+        }
+    }
+    if eligible.is_empty() {
+        return Err(AjoError::NoEligibleMembers);
+    }
+    Ok(eligible)
+}
+
+// ── Milestone & achievement detection ─────────────────────────────────────
+
+/// Checks which group milestones have been newly achieved based on group state.
+pub fn check_group_milestones(env: &Env, group: &Group) -> Vec<GroupMilestone> {
+    let mut milestones = Vec::new(env);
+
+    let total_cycles = group.members.len() as u32;
+    let completed_cycles = group.payout_index;
+
+    // First payout
+    if completed_cycles == 1 {
+        milestones.push_back(GroupMilestone::FirstPayout);
+    }
+
+    // Halfway complete
+    if total_cycles >= 2 && completed_cycles == total_cycles / 2 {
+        milestones.push_back(GroupMilestone::HalfwayComplete);
+    }
+
+    // Three quarters complete
+    if total_cycles >= 4 && completed_cycles == (total_cycles * 3) / 4 {
+        milestones.push_back(GroupMilestone::ThreeQuartersComplete);
+    }
+
+    // Fully completed
+    if group.is_complete {
+        milestones.push_back(GroupMilestone::FullyCompleted);
+
+        // Check for perfect attendance (all members on-time every cycle)
+        if check_perfect_attendance(env, group) {
+            milestones.push_back(GroupMilestone::PerfectAttendance);
+        }
+
+        // Check for zero penalties
+        if check_zero_penalties(env, group) {
+            milestones.push_back(GroupMilestone::ZeroPenalties);
+        }
+    }
+
+    milestones
+}
+
+/// Returns true if all members contributed on time every cycle (no late contributions).
+fn check_perfect_attendance(env: &Env, group: &Group) -> bool {
+    for member in group.members.iter() {
+        if let Some(penalty) = crate::storage::get_member_penalty(env, group.id, &member) {
+            if penalty.late_count > 0 {
+                return false;
+            }
+        }
+    }
+    true
+}
+
+/// Returns true if no penalties were incurred across all cycles.
+fn check_zero_penalties(env: &Env, group: &Group) -> bool {
+    let total_cycles = group.members.len() as u32;
+    for cycle in 1..=total_cycles {
+        let pool = crate::storage::get_cycle_penalty_pool(env, group.id, cycle);
+        if pool > 0 {
+            return false;
+        }
+    }
+    true
+}
+
+/// Checks which member achievements have been newly earned.
+pub fn check_member_achievements(
+    env: &Env,
+    _member: &Address,
+    stats: &crate::types::MemberStats,
+) -> Vec<MemberAchievement> {
+    let mut achievements = Vec::new(env);
+
+    // First contribution
+    if stats.total_contributions == 1 {
+        achievements.push_back(MemberAchievement::FirstContribution);
+    }
+
+    // Reliable (95%+ on-time rate)
+    if stats.total_contributions >= 5 {
+        let on_time_rate = (stats.on_time_contributions * 100) / stats.total_contributions;
+        if on_time_rate >= 95 {
+            achievements.push_back(MemberAchievement::Reliable);
+        }
+    }
+
+    // Veteran (5+ completed groups)
+    if stats.total_groups_completed >= 5 {
+        achievements.push_back(MemberAchievement::Veteran);
+    }
+
+    // High roller (1M+ XLM = 10^13 stroops contributed)
+    if stats.total_amount_contributed >= 10_000_000_000_000 {
+        achievements.push_back(MemberAchievement::HighRoller);
+    }
+
+    // Perfect attendance check (no late contributions ever)
+    if stats.total_contributions >= 10 && stats.late_contributions == 0 {
+        achievements.push_back(MemberAchievement::PerfectAttendance);
+    }
+
+    achievements
+}
+
+/// Initializes default MemberStats for a new member.
+pub fn default_member_stats(env: &Env, member: &Address) -> crate::types::MemberStats {
+    crate::types::MemberStats {
+        member: member.clone(),
+        total_groups_joined: 0,
+        total_groups_completed: 0,
+        total_contributions: 0,
+        on_time_contributions: 0,
+        late_contributions: 0,
+        total_amount_contributed: 0,
+        achievements: Vec::new(env),
+    }
+}
+
+// ── Multi-token helpers ───────────────────────────────────────────────────
+
+/// Validates an accepted-token list for multi-token group creation.
+///
+/// Checks:
+/// 1. List is non-empty
+/// 2. List does not exceed [`MAX_ACCEPTED_TOKENS`]
+/// 3. Every weight is > 0
+/// 4. No duplicate token addresses
+pub fn validate_token_list(
+    _env: &Env,
+    tokens: &Vec<crate::types::TokenConfig>,
+) -> Result<(), AjoError> {
+    use crate::types::MAX_ACCEPTED_TOKENS;
+
+    if tokens.is_empty() {
+        return Err(AjoError::InvalidMultiTokenConfig);
+    }
+    if tokens.len() > MAX_ACCEPTED_TOKENS {
+        return Err(AjoError::InvalidMultiTokenConfig);
+    }
+
+    // Validate weights and check for duplicates with an O(n²) scan.
+    // Acceptable because MAX_ACCEPTED_TOKENS is small (10).
+    let len = tokens.len();
+    for i in 0..len {
+        let tc = tokens.get(i).unwrap();
+        if tc.weight == 0 {
+            return Err(AjoError::InvalidMultiTokenConfig);
+        }
+        for j in (i + 1)..len {
+            let other = tokens.get(j).unwrap();
+            if tc.address == other.address {
+                return Err(AjoError::InvalidMultiTokenConfig);
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Locates a token in the multi-token config and returns its config plus the
+/// primary token's weight (needed for equivalence calculation).
+///
+/// # Returns
+/// `(matched_token_config, primary_weight)`
+///
+/// # Errors
+/// * `TokenNotAccepted` – the address is not in the accepted list
+pub fn find_token_config(
+    config: &crate::types::MultiTokenConfig,
+    token_address: &Address,
+) -> Result<(crate::types::TokenConfig, u32), AjoError> {
+    let primary_weight = config.accepted_tokens.get(0).unwrap().weight;
+
+    for i in 0..config.accepted_tokens.len() {
+        let tc = config.accepted_tokens.get(i).unwrap();
+        if tc.address == *token_address {
+            return Ok((tc, primary_weight));
+        }
+    }
+
+    Err(AjoError::TokenNotAccepted)
+}
+
+/// Calculates the equivalent contribution amount in a secondary token.
+///
+/// Formula: `base_amount × primary_weight / token_weight`
+///
+/// If the member contributes in the primary token (`token_weight ==
+/// primary_weight`) the result equals `base_amount` exactly.
+pub fn calculate_equivalent_amount(
+    base_amount: i128,
+    primary_weight: u32,
+    token_weight: u32,
+) -> i128 {
+    (base_amount * (primary_weight as i128)) / (token_weight as i128)
 }

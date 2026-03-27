@@ -9,14 +9,29 @@ interface ProfileCardProps {
 export const ProfileCard: React.FC<ProfileCardProps> = ({ profile, isLoading = false }) => {
   if (isLoading) {
     return (
-      <div className="bg-white rounded-xl shadow-lg p-8">
+      <div
+        className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-8 relative overflow-hidden"
+        aria-busy="true"
+        aria-label="Loading profile"
+      >
+        {/* Shimmer overlay */}
+        <div className="absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-white/20 to-transparent z-10" />
         <div className="flex items-start gap-6">
-          <div className="skeleton w-24 h-24 rounded-full" />
+          <div className="skeleton w-24 h-24 rounded-full flex-shrink-0" />
           <div className="flex-1 space-y-3">
             <div className="skeleton h-8 w-48 rounded" />
             <div className="skeleton h-4 w-64 rounded" />
             <div className="skeleton h-4 w-32 rounded" />
+            <div className="skeleton h-4 w-40 rounded" />
           </div>
+        </div>
+        <div className="grid grid-cols-3 gap-4 mt-8 pt-6 border-t border-gray-200 dark:border-slate-700">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="text-center space-y-2">
+              <div className="skeleton h-8 w-16 rounded mx-auto" />
+              <div className="skeleton h-3.5 w-20 rounded mx-auto" />
+            </div>
+          ))}
         </div>
       </div>
     )
@@ -69,6 +84,13 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({ profile, isLoading = f
             </svg>
             <span>Joined {new Date(profile.joinedAt).toLocaleDateString()}</span>
           </div>
+          {profile.kycLevel !== undefined && (
+            <div className="mt-2">
+              <span className="inline-block bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded">
+                KYC L{profile.kycLevel} ({profile.kycStatus || 'none'})
+              </span>
+            </div>
+          )}
         </div>
       </div>
 

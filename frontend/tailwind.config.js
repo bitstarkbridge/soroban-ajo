@@ -75,6 +75,20 @@ darkMode: 'class',
         foreground: 'var(--color-foreground)',
         muted: 'var(--color-muted)',
         border: 'var(--color-border)',
+        // Issue #321: dark mode color tokens
+        dark: {
+          bg: {
+            primary: '#0f0f1e',
+            secondary: '#1a1a2e',
+            tertiary: '#25253e',
+          },
+          text: {
+            primary: '#ffffff',
+            secondary: 'rgba(255,255,255,0.7)',
+            muted: 'rgba(255,255,255,0.45)',
+          },
+          border: 'rgba(255,255,255,0.1)',
+        },
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
@@ -132,6 +146,8 @@ darkMode: 'class',
         'glow-sm': '0 0 15px -3px rgba(99, 102, 241, 0.15)',
         'glow-md': '0 0 25px -5px rgba(99, 102, 241, 0.2)',
         'glow-lg': '0 0 35px -5px rgba(99, 102, 241, 0.25)',
+        'error-glow': '0 0 15px -3px rgba(239, 68, 68, 0.15)',
+        'success-glow': '0 0 15px -3px rgba(16, 185, 129, 0.15)',
         card: '0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.04)',
         'card-hover': '0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04)',
         'card-active': '0 20px 40px -10px rgba(0, 0, 0, 0.1), 0 8px 16px -8px rgba(0, 0, 0, 0.06)',
@@ -149,6 +165,15 @@ darkMode: 'class',
         'gradient-stellar-subtle': 'linear-gradient(135deg, rgba(99, 102, 241, 0.05) 0%, rgba(168, 85, 247, 0.05) 100%)',
         'gradient-radial-glow': 'radial-gradient(circle at 50% 50%, rgba(99, 102, 241, 0.1) 0%, transparent 70%)',
         'gradient-mesh': 'radial-gradient(at 20% 30%, rgba(99, 102, 241, 0.15) 0px, transparent 50%), radial-gradient(at 80% 70%, rgba(168, 85, 247, 0.15) 0px, transparent 50%), radial-gradient(at 50% 50%, rgba(139, 92, 246, 0.1) 0px, transparent 50%)',
+        // Issue #317 gradient system
+        'gradient-primary': 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        'gradient-success': 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)',
+        'gradient-warning': 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+        'gradient-info': 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+        'gradient-accent-1': 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
+        'gradient-accent-2': 'linear-gradient(135deg, #30cfd0 0%, #330867 100%)',
+        'gradient-primary-dark': 'linear-gradient(135deg, #7c3aed 0%, #a855f7 100%)',
+        'gradient-success-dark': 'linear-gradient(135deg, #059669 0%, #10b981 100%)',
       },
       animation: {
         'fade-in': 'fadeIn 0.5s ease-out',
@@ -159,9 +184,16 @@ darkMode: 'class',
         'scale-in': 'scaleIn 0.2s ease-out',
         'scale-out': 'scaleOut 0.2s ease-in',
         shimmer: 'shimmer 2s infinite linear',
+        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
         'pulse-soft': 'pulseSoft 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
         float: 'float 3s ease-in-out infinite',
         'spin-slow': 'spin 3s linear infinite',
+        // New micro-interaction animations
+        'ripple': 'ripple 600ms ease-out',
+        'shake': 'shake 0.3s ease-in-out',
+        'lift': 'lift 0.3s ease-out',
+        'slide-in-up': 'slideInUp 0.3s ease-out',
+        'bounce-in': 'bounceIn 0.5s ease-out',
       },
       keyframes: {
         fadeIn: {
@@ -204,6 +236,30 @@ darkMode: 'class',
           '0%, 100%': { transform: 'translateY(0)' },
           '50%': { transform: 'translateY(-6px)' },
         },
+        // New micro-interaction keyframes
+        ripple: {
+          '0%': { transform: 'scale(0)', opacity: '0.5' },
+          '100%': { transform: 'scale(4)', opacity: '0' },
+        },
+        shake: {
+          '0%, 100%': { transform: 'translateX(0)' },
+          '10%, 30%, 50%, 70%, 90%': { transform: 'translateX(-4px)' },
+          '20%, 40%, 60%, 80%': { transform: 'translateX(4px)' },
+        },
+        lift: {
+          '0%': { transform: 'translateY(0)' },
+          '100%': { transform: 'translateY(-4px)' },
+        },
+        slideInUp: {
+          '0%': { transform: 'translateY(-10px)', opacity: '0' },
+          '100%': { transform: 'translateY(0)', opacity: '1' },
+        },
+        bounceIn: {
+          '0%': { transform: 'scale(0.3)', opacity: '0' },
+          '50%': { transform: 'scale(1.05)', opacity: '1' },
+          '70%': { transform: 'scale(0.9)' },
+          '100%': { transform: 'scale(1)' },
+        },
       },
       transitionDuration: {
         instant: '75ms',
@@ -216,6 +272,22 @@ darkMode: 'class',
       transitionTimingFunction: {
         'bounce-in': 'cubic-bezier(0.68, -0.55, 0.265, 1.55)',
         elastic: 'cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+      },
+      // Issue #318: bento grid row sizes
+      gridAutoRows: {
+        'bento-sm': '160px',
+        'bento-md': '200px',
+        'bento-lg': '240px',
+      },
+      // Issue #318: animation delay utilities
+      animationDelay: {
+        75: '75ms',
+        100: '100ms',
+        150: '150ms',
+        200: '200ms',
+        300: '300ms',
+        500: '500ms',
+        700: '700ms',
       },
       zIndex: {
         base: '0',

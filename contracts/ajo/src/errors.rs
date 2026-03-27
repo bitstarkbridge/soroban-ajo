@@ -116,15 +116,48 @@ pub enum AjoError {
     /// Cannot request refund before cycle deadline.
     CycleNotExpired = 37,
 
-    /// Dispute not found in storage
-    DisputeNotFound = 38,
-    /// Dispute has already been resolved or rejected
-    DisputeAlreadyResolved = 39,
-    /// Member has already voted on this dispute
-    AlreadyVotedOnDispute = 40,
-    /// Dispute voting period has ended
-    VotingPeriodEndedDispute = 41,
-    /// Voter is not involved in the dispute (not complainant or defendant)
-    NotDisputeMember = 42,
+    /// Token contract address is invalid or not found.
+    InvalidTokenAddress = 38,
+
+    /// Contract has insufficient token balance for payout.
+    InsufficientContractBalance = 39,
+
+    /// Token allowance is insufficient for transfer.
+    InsufficientAllowance = 40,
+
+    /// Insurance claim not found or invalid.
+    InvalidClaim = 41,
+
+    /// Claim has already been processed (approved or rejected).
+    ClaimAlreadyProcessed = 42,
+
+    /// Insurance pool has insufficient balance for payout.
+    InsufficientPoolBalance = 43,
+
+    /// Insurance pool for token not found.
+    PoolNotFound = 44,
+
+    /// Invalid or unsupported payout ordering strategy.
+    InvalidStrategy = 45,
+
+    /// Voting is not open for this group's payout strategy.
+    VotingNotOpen = 46,
+
+    /// No eligible members remain for payout selection (all have been paid).
+    NoEligibleMembers = 47,
+
+    // ── Multi-token errors ────────────────────────────────────────────────
+
+    /// The token is not in the group's accepted token list.
+    TokenNotAccepted = 48,
+
+    /// Invalid multi-token configuration (empty list, duplicates, zero weight,
+    /// or too many tokens).
+    InvalidMultiTokenConfig = 49,
+
+    /// Group does not have multi-token configuration.
+    NotMultiTokenGroup = 50,
+    /// No notification preferences found for this member.
+    PreferencesNotFound = 48,
 }
 

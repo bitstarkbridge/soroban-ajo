@@ -7,6 +7,16 @@ import type {
   WalletProvider,
   WalletSignatureResult,
 } from '../types/auth'
+import {
+  ensureFreighterAllowed,
+  getStellarNetworkFromFreighter,
+  waitForFreighterApi,
+} from '@/utils/freighter'
+import {
+  connectLobstrVault,
+  isMobileDevice,
+  isValidStellarAddress as validateLobstrAddress,
+} from '@/utils/lobstr'
 
 const DEFAULT_CONFIG: SessionConfig = {
   sessionDuration: 30 * 60 * 1000,
@@ -164,18 +174,10 @@ class AuthService {
 
     switch (provider) {
       case 'freighter': {
-        // Wait for Freighter to load (it injects asynchronously)
-        let freighter = (window as any).freighterApi
-        if (!freighter) {
-          // Wait up to 3 seconds for Freighter to load
-          for (let i = 0; i < 30; i++) {
-            await new Promise(resolve => setTimeout(resolve, 100))
-            if ((window as any).freighterApi) {
-              freighter = (window as any).freighterApi
-              break
-            }
-          }
-        }
+        const freighter = await waitForFreighterApi({
+          timeoutMs: 3000,
+          intervalMs: 100,
+        })
 
         if (typeof window === 'undefined' || !freighter) {
           throw new AuthError(
@@ -184,10 +186,7 @@ class AuthService {
           )
         }
 
-        const isAllowed = await freighter.isAllowed()
-        if (!isAllowed) {
-          await freighter.setAllowed()
-        }
+        await ensureFreighterAllowed(freighter)
 
         const address: string = await freighter.getPublicKey()
         if (!isValidStellarAddress(address)) {
@@ -197,12 +196,16 @@ class AuthService {
           )
         }
 
-        const networkDetails = await freighter.getNetworkDetails()
+        const networkDetails = await freighter.getNetworkDetails?.()
+        const freighterNetwork = getStellarNetworkFromFreighter(networkDetails)
         const network: StellarNetwork =
-          networkDetails?.network === 'PUBLIC' ? 'mainnet' : 'testnet'
+          freighterNetwork === 'mainnet' ? 'mainnet' : 'testnet'
 
         let signature: string
         try {
+          if (!freighter.signAuthEntry) {
+            throw new Error('signAuthEntry unavailable')
+          }
           signature = await freighter.signAuthEntry(challenge)
         } catch {
           // Fallback: use the challenge itself as proof if signAuthEntry is unavailable
@@ -210,6 +213,44 @@ class AuthService {
         }
 
         return { address, signature, network }
+      }
+
+      case 'lobstr': {
+        // Lobstr wallet support
+        if (isMobileDevice()) {
+          throw new AuthError(
+            'Lobstr mobile app authentication requires a callback flow. Please use the "Connect with Lobstr" button which will redirect you to the Lobstr app.',
+            'MOBILE_FLOW_REQUIRED',
+          )
+        }
+        
+        // Desktop: Try Lobstr Vault extension
+        try {
+          const result = await connectLobstrVault()
+          
+          if (!validateLobstrAddress(result.address)) {
+            throw new AuthError(
+              'Invalid Stellar address returned by Lobstr Vault',
+              'INVALID_ADDRESS',
+            )
+          }
+          
+          // Use challenge as signature since Lobstr Vault doesn't support signAuthEntry
+          const signature = challenge
+          
+          return {
+            address: result.address,
+            signature,
+            network: result.network,
+          }
+        } catch (error) {
+          if (error instanceof AuthError) throw error
+          
+          throw new AuthError(
+            'Lobstr Vault extension not found. Please install Lobstr Vault from the Chrome Web Store, or use Lobstr mobile app.',
+            'WALLET_NOT_FOUND',
+          )
+        }
       }
 
       case 'albedo':

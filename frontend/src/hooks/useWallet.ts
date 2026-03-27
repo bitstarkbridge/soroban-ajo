@@ -6,6 +6,9 @@ import {
     WalletConnectionResult,
     WalletInfo,
 } from '../types/wallet';
+import { getStellarNetworkFromFreighter, waitForFreighterApi } from '../utils/freighter';
+
+export type WalletConnectionState = 'idle' | 'connecting' | 'success' | 'error';
 
 const STORAGE_KEY = 'soroban_ajo_wallet';
 
@@ -21,6 +24,7 @@ export const useWallet = () => {
     const [walletState, setWalletState] = useState<WalletState>(initialState);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<WalletError | null>(null);
+    const [connectionState, setConnectionState] = useState<WalletConnectionState>('idle');
 
     // Check if wallets are installed
     const detectWallets = useCallback((): WalletInfo[] => {
@@ -28,12 +32,17 @@ export const useWallet = () => {
             {
                 name: 'Freighter',
                 type: 'freighter',
-                isInstalled: typeof window !== 'undefined' && !!window.freighter,
+                isInstalled: typeof window !== 'undefined' && (!!window.freighterApi || !!window.freighter),
             },
             {
                 name: 'Albedo',
                 type: 'albedo',
                 isInstalled: typeof window !== 'undefined' && !!window.albedo,
+            },
+            {
+                name: 'Lobstr Vault',
+                type: 'lobstr',
+                isInstalled: typeof window !== 'undefined' && !!window.lobstrVault,
             },
         ];
         return wallets;
@@ -64,8 +73,13 @@ export const useWallet = () => {
 
     // Connect to Freighter wallet
     const connectFreighter = useCallback(
-        async (): Promise<WalletConnectionResult> => {
-            if (!window.freighter) {
+        async (requestedNetwork?: WalletState['network']): Promise<WalletConnectionResult> => {
+            // By the time a user clicks "connect", Freighter should be injected already.
+            // Do a quick poll to handle slow extension initialization without slowing tests too much.
+            const freighter = (typeof window !== 'undefined' && (window as any).freighterApi)
+                ? (window as any).freighterApi
+                : await waitForFreighterApi({ timeoutMs: 500, intervalMs: 50 });
+            if (!freighter) {
                 return {
                     success: false,
                     error: {
@@ -77,14 +91,15 @@ export const useWallet = () => {
             }
 
             try {
-                const publicKey = await window.freighter.getPublicKey();
-                const walletNetwork = await window.freighter.getNetwork();
+                const publicKey = await freighter.getPublicKey();
+                const networkDetails = await freighter.getNetworkDetails?.();
+                const walletNetwork = requestedNetwork ?? getStellarNetworkFromFreighter(networkDetails);
 
                 const newState: WalletState = {
                     isConnected: true,
                     address: publicKey,
                     walletType: 'freighter',
-                    network: walletNetwork as 'testnet' | 'mainnet' | 'futurenet',
+                    network: walletNetwork,
                     publicKey,
                 };
 
@@ -161,18 +176,74 @@ export const useWallet = () => {
         [saveWalletState]
     );
 
+    // Connect to Lobstr wallet
+    const connectLobstr = useCallback(
+        async (network: string = 'testnet'): Promise<WalletConnectionResult> => {
+            if (!window.lobstrVault) {
+                return {
+                    success: false,
+                    error: {
+                        code: 'WALLET_NOT_INSTALLED',
+                        message: 'Lobstr Vault extension is not installed. Please install it from the Chrome Web Store or use the Lobstr mobile app.',
+                        walletType: 'lobstr',
+                    },
+                };
+            }
+
+            try {
+                const publicKey = await window.lobstrVault.getPublicKey();
+
+                if (!publicKey) {
+                    throw new Error('Failed to get public key from Lobstr Vault');
+                }
+
+                const newState: WalletState = {
+                    isConnected: true,
+                    address: publicKey,
+                    walletType: 'lobstr',
+                    network: network as 'testnet' | 'mainnet' | 'futurenet',
+                    publicKey,
+                };
+
+                setWalletState(newState);
+                saveWalletState(newState);
+
+                return {
+                    success: true,
+                    address: publicKey,
+                    publicKey,
+                };
+            } catch (err) {
+                const error = err as any;
+                const walletError: WalletError = {
+                    code: error.code || 'CONNECTION_FAILED',
+                    message: error.message || 'Failed to connect to Lobstr Vault. Please make sure you have set up your vault account.',
+                    walletType: 'lobstr',
+                };
+                return {
+                    success: false,
+                    error: walletError,
+                };
+            }
+        },
+        [saveWalletState]
+    );
+
     // Main connect function
     const connect = useCallback(
         async ({ walletType, network = 'testnet' }: ConnectWalletParams): Promise<WalletConnectionResult> => {
             setIsLoading(true);
             setError(null);
+            setConnectionState('connecting');
 
             let result: WalletConnectionResult;
 
             if (walletType === 'freighter') {
-                result = await connectFreighter();
+                result = await connectFreighter(network);
             } else if (walletType === 'albedo') {
                 result = await connectAlbedo(network);
+            } else if (walletType === 'lobstr') {
+                result = await connectLobstr(network);
             } else {
                 result = {
                     success: false,
@@ -185,18 +256,22 @@ export const useWallet = () => {
 
             if (!result.success && result.error) {
                 setError(result.error);
+                setConnectionState('error');
+            } else {
+                setConnectionState('success');
             }
 
             setIsLoading(false);
             return result;
         },
-        [connectFreighter, connectAlbedo]
+        [connectFreighter, connectAlbedo, connectLobstr]
     );
 
     // Disconnect wallet
     const disconnect = useCallback(() => {
         setWalletState(initialState);
         setError(null);
+        setConnectionState('idle');
         localStorage.removeItem(STORAGE_KEY);
     }, []);
 
@@ -208,6 +283,7 @@ export const useWallet = () => {
         walletState,
         isLoading,
         error,
+        connectionState,
         availableWallets,
 
         // Actions

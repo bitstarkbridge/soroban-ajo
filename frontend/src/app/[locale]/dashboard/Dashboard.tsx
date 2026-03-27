@@ -9,14 +9,18 @@
 import React from 'react'
 import { useRouter } from 'next/navigation'
 import { useDashboard } from '@/hooks/useDashboard'
+import { useJoinGroup } from '@/hooks/useContractData'
 import { GroupsGrid } from '@/components/GroupsGrid'
 import { GroupsList } from '@/components/GroupsList'
 import { UserGroupsDashboard } from '@/components/UserGroupsDashboard'
 import { useAuth } from '@/hooks/useAuth'
+import toast from 'react-hot-toast'
 
 export default function Dashboard() {
   const router = useRouter()
   const { address } = useAuth()
+  const joinGroupMutation = useJoinGroup()
+  
   const {
     // ── existing ──
     viewMode,
@@ -39,8 +43,14 @@ export default function Dashboard() {
     router.push(`/groups/${groupId}`)
   }
 
-  const handleJoinGroup = (_groupId: string) => {
-    // TODO: Implement join group logic
+  const handleJoinGroup = async (groupId: string) => {
+    try {
+      await joinGroupMutation.mutateAsync(groupId)
+      toast.success('Successfully joined the group!')
+    } catch (error) {
+      console.error('Failed to join group:', error)
+      toast.error(error instanceof Error ? error.message : 'Failed to join group')
+    }
   }
 
   const EmptyState = () => (

@@ -1,47 +1,35 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { useNotifications } from '@/hooks/useNotifications';
-import { subscribeToPushNotifications, unsubscribeFromPushNotifications, requestNotificationPermission } from '@/services/pushNotifications';
-import { Bell, Mail, Smartphone, Check } from 'lucide-react';
+import { usePushNotifications } from '@/hooks/usePushNotifications';
+import { Bell, Mail, Smartphone, Check, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function NotificationPreferences() {
-  const { preferences, updatePreferences, setPushSubscription } = useNotifications();
-  const [pushEnabled, setPushEnabled] = useState(false);
-  const [pushPermission, setPushPermission] = useState<NotificationPermission>('default');
-
-  useEffect(() => {
-    if ('Notification' in window) {
-      setPushPermission(Notification.permission);
-    }
-  }, []);
+  const { preferences, updatePreferences } = useNotifications();
+  const { status, isSubscribed, isLoading, subscribe, unsubscribe } = usePushNotifications();
 
   const handlePushToggle = async () => {
-    if (!pushEnabled) {
-      const permission = await requestNotificationPermission();
-      setPushPermission(permission);
-
-      if (permission === 'granted') {
-        const subscription = await subscribeToPushNotifications();
-        if (subscription) {
-          setPushSubscription(subscription);
-          setPushEnabled(true);
-          updatePreferences({ push: true });
-          toast.success('Push notifications enabled');
-        } else {
-          toast.error('Failed to enable push notifications');
-        }
-      } else {
-        toast.error('Notification permission denied');
-      }
-    } else {
-      const success = await unsubscribeFromPushNotifications();
-      if (success) {
-        setPushSubscription(null);
-        setPushEnabled(false);
+    if (isSubscribed) {
+      const ok = await unsubscribe();
+      if (ok) {
         updatePreferences({ push: false });
         toast.success('Push notifications disabled');
+      } else {
+        toast.error('Failed to disable push notifications');
+      }
+    } else {
+      if (status === 'denied') {
+        toast.error('Permission denied – enable notifications in browser settings');
+        return;
+      }
+      const ok = await subscribe();
+      if (ok) {
+        updatePreferences({ push: true });
+        toast.success('Push notifications enabled');
+      } else {
+        toast.error('Failed to enable push notifications');
       }
     }
   };
@@ -69,18 +57,15 @@ export default function NotificationPreferences() {
           </h4>
 
           <div className="space-y-3">
+            {/* In-App */}
             <label className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
                   <Bell className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">
-                    In-App Notifications
-                  </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    Show notifications in the app
-                  </p>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">In-App Notifications</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Show notifications in the app</p>
                 </div>
               </div>
               <input
@@ -91,49 +76,52 @@ export default function NotificationPreferences() {
               />
             </label>
 
-            <label className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer">
+            {/* Push */}
+            <div className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
                   <Smartphone className="w-5 h-5 text-purple-600 dark:text-purple-400" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">
-                    Push Notifications
-                  </p>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">Push Notifications</p>
                   <p className="text-xs text-gray-500 dark:text-gray-400">
-                    {pushPermission === 'denied'
-                      ? 'Permission denied - enable in browser settings'
+                    {status === 'unsupported'
+                      ? 'Not supported in this browser'
+                      : status === 'denied'
+                      ? 'Permission denied – enable in browser settings'
                       : 'Receive browser push notifications'}
                   </p>
                 </div>
               </div>
               <button
                 onClick={handlePushToggle}
-                disabled={pushPermission === 'denied'}
-                className={`w-12 h-6 rounded-full transition-colors relative ${
-                  pushEnabled ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'
-                } ${pushPermission === 'denied' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                disabled={isLoading || status === 'unsupported' || status === 'denied'}
+                aria-label={isSubscribed ? 'Disable push notifications' : 'Enable push notifications'}
+                className={`w-12 h-6 rounded-full transition-colors relative flex-shrink-0 ${
+                  isSubscribed ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'
+                } ${isLoading || status === 'unsupported' || status === 'denied' ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
-                <span
-                  className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${
-                    pushEnabled ? 'translate-x-6' : ''
-                  }`}
-                />
+                {isLoading ? (
+                  <Loader2 className="absolute inset-0 m-auto w-4 h-4 text-white animate-spin" />
+                ) : (
+                  <span
+                    className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${
+                      isSubscribed ? 'translate-x-6' : ''
+                    }`}
+                  />
+                )}
               </button>
-            </label>
+            </div>
 
+            {/* Email */}
             <label className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
                   <Mail className="w-5 h-5 text-green-600 dark:text-green-400" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">
-                    Email Notifications
-                  </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    Receive notifications via email
-                  </p>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">Email Notifications</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Receive notifications via email</p>
                 </div>
               </div>
               <input
@@ -148,10 +136,7 @@ export default function NotificationPreferences() {
 
         {/* Notification Types */}
         <div className="p-4">
-          <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">
-            Notification Types
-          </h4>
-
+          <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Notification Types</h4>
           <div className="space-y-2">
             {[
               { key: 'contributionDue24h', label: 'Contribution due in 24 hours', icon: '⏰' },
@@ -168,9 +153,7 @@ export default function NotificationPreferences() {
               >
                 <div className="flex items-center gap-2">
                   <span className="text-lg">{item.icon}</span>
-                  <span className="text-sm text-gray-700 dark:text-gray-300">
-                    {item.label}
-                  </span>
+                  <span className="text-sm text-gray-700 dark:text-gray-300">{item.label}</span>
                 </div>
                 <input
                   type="checkbox"

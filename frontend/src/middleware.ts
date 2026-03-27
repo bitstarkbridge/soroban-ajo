@@ -4,9 +4,12 @@ import { locales } from './i18n';
 export default createMiddleware({
   locales,
   defaultLocale: 'en',
-  localePrefix: 'always'
+  localePrefix: 'always',
 });
 
 export const config = {
-  matcher: ['/((?!api|_next|_vercel|.*\\..*).*)']
+  matcher: [
+    // Match all pathnames except Next.js internals, API routes, and static files
+    '/((?!api|_next|static|.*\\..*).*)',
+  ],
 };

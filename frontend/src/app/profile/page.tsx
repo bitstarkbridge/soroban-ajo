@@ -1,5 +1,8 @@
 'use client'
 
+// Force dynamic rendering to avoid static generation timeout
+export const dynamic = 'force-dynamic'
+
 import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
@@ -7,12 +10,13 @@ import { useProfile } from '@/hooks/useProfile'
 import { ProfileCard } from '@/components/ProfileCard'
 import { ProfileForm } from '@/components/ProfileForm'
 import { SettingsPanel } from '@/components/SettingsPanel'
+import { KYCVerification } from '@/components/KYCVerification'
 import type { ActivityItem } from '@/types/profile'
 
 export default function ProfilePage() {
   const router = useRouter()
   const { isAuthenticated, address, logout } = useAuth()
-  const { profile, activities, isLoading, updateProfile, savePreferences } = useProfile()
+  const { profile, activities, loading, updateProfile, updatePreferences } = useProfile(address)
   const [activeSection, setActiveSection] = useState<'overview' | 'edit' | 'settings' | 'activity'>('overview')
 
   // Redirect to dashboard if not authenticated
@@ -22,7 +26,18 @@ export default function ProfilePage() {
     }
   }, [isAuthenticated, router])
 
-  if (!isAuthenticated || !profile) {
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-slate-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-blue-600 dark:border-indigo-400 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-gray-600 dark:text-slate-400">Redirecting...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (loading || !profile) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-slate-900 flex items-center justify-center">
         <div className="text-center">
@@ -115,8 +130,12 @@ export default function ProfilePage() {
           <div className="lg:col-span-3 space-y-6">
             {activeSection === 'overview' && (
               <>
-                <ProfileCard profile={profile} isLoading={isLoading} />
-                
+                <ProfileCard profile={profile} isLoading={loading} />
+                {/* KYC block */}
+                <div className="mt-6">
+                  <KYCVerification />
+                </div>
+
                 {/* Quick Stats */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <StatCard
@@ -142,15 +161,15 @@ export default function ProfilePage() {
             )}
 
             {activeSection === 'edit' && (
-              <ProfileForm profile={profile} onSave={updateProfile} isLoading={isLoading} />
+              <ProfileForm profile={profile} onSave={updateProfile} isLoading={loading} />
             )}
 
             {activeSection === 'settings' && (
-              <SettingsPanel preferences={profile.preferences} onSave={savePreferences} isLoading={isLoading} />
+              <SettingsPanel preferences={profile.preferences} onSave={updatePreferences} isLoading={loading} email={profile.email} />
             )}
 
             {activeSection === 'activity' && (
-              <ActivityHistory activities={activities} isLoading={isLoading} />
+              <ActivityHistory activities={activities} isLoading={loading} />
             )}
           </div>
         </div>

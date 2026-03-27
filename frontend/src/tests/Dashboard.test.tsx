@@ -6,6 +6,9 @@ import { useDashboard } from '@/hooks/useDashboard'
 // Mock dependencies
 jest.mock('@/hooks/useAuth')
 jest.mock('@/hooks/useDashboard')
+jest.mock('@/components/GamificationDashboard', () => ({
+  GamificationDashboard: () => <div>Gamification Dashboard</div>,
+}))
 jest.mock('next/navigation', () => ({
   useRouter: () => ({
     push: jest.fn(),
@@ -42,6 +45,7 @@ const mockUseDashboard = {
   ],
   totalGroups: 1,
   isLoading: false,
+  userAddress: 'test-address',
 }
 
 describe('Dashboard', () => {
@@ -61,6 +65,7 @@ describe('Dashboard', () => {
 
     expect(screen.getByText('Dashboard')).toBeInTheDocument()
     expect(screen.getByText('Manage your savings groups')).toBeInTheDocument()
+    expect(screen.getByText('Gamification Dashboard')).toBeInTheDocument()
   })
 
   it('renders search input', () => {

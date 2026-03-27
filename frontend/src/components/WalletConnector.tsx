@@ -4,6 +4,7 @@ import { useWalletBalance } from '../hooks/useWalletBalance'
 import { BalanceDisplay } from './BalanceDisplay'
 import { fundWithFriendbot, getAddFundsUrl, IS_TESTNET } from '../services/soroban'
 import { formatXLMCompact, formatRelativeTime, truncateAddress } from '../utils/formatters'
+import { detectWallets } from '../utils/walletDetection'
 
 type Tab = 'balance' | 'transactions'
 
@@ -36,8 +37,37 @@ export const WalletConnector: React.FC = () => {
   const [connectError, setConnectError] = useState<string | null>(null)
   const [isFunding, setIsFunding] = useState(false)
   const [fundSuccess, setFundSuccess] = useState(false)
+  const [showWalletSelection, setShowWalletSelection] = useState(false)
 
   const menuRef = useRef<HTMLDivElement>(null)
+
+  // Detect wallets using comprehensive detection
+  const walletDetection = detectWallets()
+
+  // Available wallets
+  const availableWallets = [
+    {
+      name: 'Freighter',
+      provider: 'freighter' as const,
+      isInstalled: walletDetection.freighter,
+      icon: '🚀',
+      description: 'Browser extension',
+    },
+    {
+      name: 'LOBSTR',
+      provider: 'lobstr' as const,
+      isInstalled: walletDetection.lobstr,
+      icon: '🦞',
+      description: 'Mobile app or Vault extension',
+    },
+    {
+      name: 'Albedo',
+      provider: 'albedo' as const,
+      isInstalled: walletDetection.albedo,
+      icon: '⭐',
+      description: 'Web-based wallet',
+    },
+  ]
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -51,10 +81,11 @@ export const WalletConnector: React.FC = () => {
     return () => document.removeEventListener('mousedown', handler)
   }, [showMenu])
 
-  const handleConnect = async () => {
+  const handleConnect = async (provider: 'freighter' | 'lobstr' | 'albedo') => {
     try {
       setConnectError(null)
-      await login({ provider: 'freighter', rememberMe: false })
+      setShowWalletSelection(false)
+      await login({ provider, rememberMe: false })
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to connect wallet'
       setConnectError(msg)
@@ -95,7 +126,7 @@ export const WalletConnector: React.FC = () => {
     return (
       <div className="relative">
         <button
-          onClick={handleConnect}
+          onClick={() => setShowWalletSelection(true)}
           className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition flex items-center gap-2"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -104,6 +135,69 @@ export const WalletConnector: React.FC = () => {
           </svg>
           Connect Wallet
         </button>
+
+        {/* Wallet Selection Modal */}
+        {showWalletSelection && (
+          <>
+            <div className="fixed inset-0 bg-black/50 z-50" onClick={() => setShowWalletSelection(false)} />
+            <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-6 w-full max-w-md z-50">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white">Select Wallet</h3>
+                <button
+                  onClick={() => setShowWalletSelection(false)}
+                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                {availableWallets.map((wallet) => (
+                  <button
+                    key={wallet.provider}
+                    onClick={() => handleConnect(wallet.provider)}
+                    disabled={!wallet.isInstalled}
+                    className={`w-full p-4 rounded-lg border-2 transition-all text-left ${
+                      wallet.isInstalled
+                        ? 'border-gray-200 hover:border-blue-500 hover:bg-blue-50 dark:border-gray-700 dark:hover:border-blue-500 dark:hover:bg-blue-900/20 cursor-pointer'
+                        : 'border-gray-100 bg-gray-50 dark:border-gray-800 dark:bg-gray-900 cursor-not-allowed opacity-60'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">{wallet.icon}</span>
+                        <div>
+                          <p className="font-semibold text-gray-900 dark:text-white">{wallet.name}</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            {wallet.description}
+                          </p>
+                          <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+                            {wallet.isInstalled ? '✓ Ready to connect' : '✗ Not installed'}
+                          </p>
+                        </div>
+                      </div>
+                      {wallet.isInstalled && (
+                        <svg className="w-5 h-5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                        </svg>
+                      )}
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                <p className="text-xs text-blue-800 dark:text-blue-200">
+                  <strong>Don't have a wallet?</strong><br />
+                  Install <a href="https://freighter.app" target="_blank" rel="noopener noreferrer" className="underline">Freighter</a>, <a href="https://lobstr.co" target="_blank" rel="noopener noreferrer" className="underline">LOBSTR</a>, or <a href="https://vault.lobstr.co" target="_blank" rel="noopener noreferrer" className="underline">Lobstr Vault</a>
+                </p>
+              </div>
+            </div>
+          </>
+        )}
+
         {connectError && (
           <div className="absolute top-full mt-2 right-0 bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded-lg text-sm max-w-xs z-50">
             {connectError}

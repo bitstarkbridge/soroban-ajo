@@ -1,7 +1,7 @@
 import { renderHook, act } from '@testing-library/react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { useWallet } from '../hooks/useWallet';
-import type { FreighterAPI, AlbedoAPI } from '../types/wallet';
+import type { FreighterApi, AlbedoAPI } from '../types/wallet';
 
 // Mock localStorage
 const localStorageMock = (() => {
@@ -27,6 +27,7 @@ Object.defineProperty(window, 'localStorage', {
 describe('useWallet', () => {
     beforeEach(() => {
         localStorageMock.clear();
+        delete (window as any).freighterApi;
         delete (window as any).freighter;
         delete (window as any).albedo;
         vi.clearAllMocks();
@@ -53,7 +54,7 @@ describe('useWallet', () => {
 
     describe('Wallet Detection', () => {
         it('should detect Freighter wallet when installed', () => {
-            (window as any).freighter = {
+            (window as any).freighterApi = {
                 isConnected: vi.fn(),
                 getPublicKey: vi.fn(),
             };
@@ -76,7 +77,7 @@ describe('useWallet', () => {
         });
 
         it('should detect both wallets when both are installed', () => {
-            (window as any).freighter = { getPublicKey: vi.fn() };
+            (window as any).freighterApi = { getPublicKey: vi.fn() };
             (window as any).albedo = { publicKey: vi.fn() };
 
             const { result } = renderHook(() => useWallet());
@@ -90,12 +91,12 @@ describe('useWallet', () => {
         const mockPublicKey = 'GXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX';
 
         beforeEach(() => {
-            const mockFreighter: Partial<FreighterAPI> = {
+            const mockFreighter: Partial<FreighterApi> = {
                 getPublicKey: vi.fn().mockResolvedValue(mockPublicKey),
-                getNetwork: vi.fn().mockResolvedValue('testnet'),
+                getNetworkDetails: vi.fn().mockResolvedValue({ network: 'TESTNET' }),
                 isConnected: vi.fn().mockResolvedValue(true),
             };
-            (window as any).freighter = mockFreighter;
+            (window as any).freighterApi = mockFreighter;
         });
 
         it('should successfully connect to Freighter', async () => {
@@ -134,7 +135,7 @@ describe('useWallet', () => {
 
         it('should handle Freighter connection error', async () => {
             const errorMessage = 'User rejected connection';
-            (window as any).freighter.getPublicKey = vi.fn().mockRejectedValue(new Error(errorMessage));
+            (window as any).freighterApi.getPublicKey = vi.fn().mockRejectedValue(new Error(errorMessage));
 
             const { result } = renderHook(() => useWallet());
 
@@ -155,7 +156,7 @@ describe('useWallet', () => {
         });
 
         it('should return error when Freighter is not installed', async () => {
-            delete (window as any).freighter;
+            delete (window as any).freighterApi;
 
             const { result } = renderHook(() => useWallet());
 
@@ -247,11 +248,11 @@ describe('useWallet', () => {
         const mockPublicKey = 'GXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX';
 
         beforeEach(() => {
-            const mockFreighter: Partial<FreighterAPI> = {
+            const mockFreighter: Partial<FreighterApi> = {
                 getPublicKey: vi.fn().mockResolvedValue(mockPublicKey),
-                getNetwork: vi.fn().mockResolvedValue('testnet'),
+                getNetworkDetails: vi.fn().mockResolvedValue({ network: 'TESTNET' }),
             };
-            (window as any).freighter = mockFreighter;
+            (window as any).freighterApi = mockFreighter;
         });
 
         it('should disconnect wallet and clear state', async () => {
@@ -323,11 +324,11 @@ describe('useWallet', () => {
         const mockPublicKey = 'GXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX';
 
         beforeEach(() => {
-            const mockFreighter: Partial<FreighterAPI> = {
+            const mockFreighter: Partial<FreighterApi> = {
                 getPublicKey: vi.fn().mockResolvedValue(mockPublicKey),
-                getNetwork: vi.fn().mockResolvedValue('mainnet'),
+                getNetworkDetails: vi.fn().mockResolvedValue({ network: 'PUBLIC' }),
             };
-            (window as any).freighter = mockFreighter;
+            (window as any).freighterApi = mockFreighter;
         });
 
         it('should connect with specified network', async () => {
@@ -359,13 +360,13 @@ describe('useWallet', () => {
         });
 
         it('should clear error on successful connection', async () => {
-            const mockFreighter: Partial<FreighterAPI> = {
+            const mockFreighter: Partial<FreighterApi> = {
                 getPublicKey: vi.fn()
                     .mockRejectedValueOnce(new Error('First attempt failed'))
                     .mockResolvedValueOnce('GXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'),
-                getNetwork: vi.fn().mockResolvedValue('testnet'),
+                getNetworkDetails: vi.fn().mockResolvedValue({ network: 'TESTNET' }),
             };
-            (window as any).freighter = mockFreighter;
+            (window as any).freighterApi = mockFreighter;
 
             const { result } = renderHook(() => useWallet());
 
