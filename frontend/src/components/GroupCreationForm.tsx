@@ -34,7 +34,7 @@ interface GroupCreationFormProps {
 export const GroupCreationForm: React.FC<GroupCreationFormProps> = ({ onSuccess }) => {
   const router = useRouter()
   const createGroupMutation = useCreateGroup()
-  
+
   const [formData, setFormData] = useState<GroupFormData>({
     groupName: '',
     description: '',
@@ -53,9 +53,9 @@ export const GroupCreationForm: React.FC<GroupCreationFormProps> = ({ onSuccess 
   const errorSummaryRef = useRef<HTMLDivElement>(null)
   const formRef = useRef<HTMLFormElement>(null)
   const groupNameRef = useRef<HTMLInputElement>(null)
-  
+
   const loading = createGroupMutation.isPending
-  
+
   const hasErrors = Object.keys(errors).length > 0
 
   const isDirty = Object.values(formData).some((value) => {
@@ -68,7 +68,7 @@ export const GroupCreationForm: React.FC<GroupCreationFormProps> = ({ onSuccess 
     data: formData,
     onRestore: (draft) => setFormData(draft),
     enabled: isDirty,
-  });
+  })
 
   // Focus on error summary when errors occur after submission
   useEffect(() => {
@@ -121,15 +121,15 @@ export const GroupCreationForm: React.FC<GroupCreationFormProps> = ({ onSuccess 
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
-    
+
     let processedValue: string | number = value
-    
+
     // Handle numeric fields
     if (name === 'cycleLength' || name === 'contributionAmount' || name === 'maxMembers') {
       const numValue = parseFloat(value)
       processedValue = isNaN(numValue) ? 0 : numValue
     }
-    
+
     setFormData({
       ...formData,
       [name]: processedValue,
@@ -156,7 +156,7 @@ export const GroupCreationForm: React.FC<GroupCreationFormProps> = ({ onSuccess 
     if (memberInput.trim() && !formData.invitedMembers.includes(memberInput.trim())) {
       setFormData({
         ...formData,
-        invitedMembers: [...formData.invitedMembers, memberInput.trim()]
+        invitedMembers: [...formData.invitedMembers, memberInput.trim()],
       })
       setMemberInput('')
     }
@@ -165,7 +165,7 @@ export const GroupCreationForm: React.FC<GroupCreationFormProps> = ({ onSuccess 
   const handleRemoveMember = (member: string) => {
     setFormData({
       ...formData,
-      invitedMembers: formData.invitedMembers.filter(m => m !== member)
+      invitedMembers: formData.invitedMembers.filter((m) => m !== member),
     })
   }
 
@@ -187,13 +187,13 @@ export const GroupCreationForm: React.FC<GroupCreationFormProps> = ({ onSuccess 
         contributionAmount: formData.contributionAmount,
         maxMembers: formData.maxMembers,
       })
-      
+
       // Clear draft on success
       removeDraft()
-      
+
       // Show success message
       toast.success(`Group "${formData.groupName}" created successfully!`)
-      
+
       // Call onSuccess callback if provided
       if (onSuccess) {
         onSuccess()
@@ -211,9 +211,7 @@ export const GroupCreationForm: React.FC<GroupCreationFormProps> = ({ onSuccess 
     <div className="bg-white rounded-xl shadow-lg p-8 max-w-2xl mx-auto">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Create a New Group</h1>
-        <p className="text-gray-600">
-          Set up your savings group and invite members to join
-        </p>
+        <p className="text-gray-600">Set up your savings group and invite members to join</p>
       </div>
 
       {hasErrors && submitted && (
@@ -226,7 +224,8 @@ export const GroupCreationForm: React.FC<GroupCreationFormProps> = ({ onSuccess 
           tabIndex={-1}
         >
           <p className="text-sm font-medium text-red-800">
-            Please fix {Object.keys(errors).length} error{Object.keys(errors).length > 1 ? 's' : ''} before submitting
+            Please fix {Object.keys(errors).length} error{Object.keys(errors).length > 1 ? 's' : ''}{' '}
+            before submitting
           </p>
         </div>
       )}
@@ -278,7 +277,9 @@ export const GroupCreationForm: React.FC<GroupCreationFormProps> = ({ onSuccess 
             }`}
             rows={3}
             aria-invalid={touched.description && !!errors.description}
-            aria-describedby={touched.description && errors.description ? 'description-error' : undefined}
+            aria-describedby={
+              touched.description && errors.description ? 'description-error' : undefined
+            }
           />
           {touched.description && errors.description && (
             <p id="description-error" className="mt-1 text-sm text-red-600" role="alert">
@@ -307,7 +308,9 @@ export const GroupCreationForm: React.FC<GroupCreationFormProps> = ({ onSuccess 
               max="365"
               aria-required="true"
               aria-invalid={touched.cycleLength && !!errors.cycleLength}
-              aria-describedby={touched.cycleLength && errors.cycleLength ? 'cycleLength-error' : undefined}
+              aria-describedby={
+                touched.cycleLength && errors.cycleLength ? 'cycleLength-error' : undefined
+              }
               required
             />
             {touched.cycleLength && errors.cycleLength && (
@@ -318,7 +321,10 @@ export const GroupCreationForm: React.FC<GroupCreationFormProps> = ({ onSuccess 
           </div>
 
           <div>
-            <label htmlFor="contributionAmount" className="block text-sm font-medium text-gray-700 mb-2">
+            <label
+              htmlFor="contributionAmount"
+              className="block text-sm font-medium text-gray-700 mb-2"
+            >
               Contribution Amount ($) <span className="text-red-500">*</span>
             </label>
             <input
@@ -330,13 +336,19 @@ export const GroupCreationForm: React.FC<GroupCreationFormProps> = ({ onSuccess 
               onChange={handleChange}
               onBlur={handleBlur}
               className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition ${
-                touched.contributionAmount && errors.contributionAmount ? 'border-red-500' : 'border-gray-300'
+                touched.contributionAmount && errors.contributionAmount
+                  ? 'border-red-500'
+                  : 'border-gray-300'
               }`}
               min="0"
               max="1000000"
               aria-required="true"
               aria-invalid={touched.contributionAmount && !!errors.contributionAmount}
-              aria-describedby={touched.contributionAmount && errors.contributionAmount ? 'contributionAmount-error' : undefined}
+              aria-describedby={
+                touched.contributionAmount && errors.contributionAmount
+                  ? 'contributionAmount-error'
+                  : undefined
+              }
               required
             />
             {touched.contributionAmount && errors.contributionAmount && (
@@ -366,7 +378,9 @@ export const GroupCreationForm: React.FC<GroupCreationFormProps> = ({ onSuccess 
             max="50"
             aria-required="true"
             aria-invalid={touched.maxMembers && !!errors.maxMembers}
-            aria-describedby={touched.maxMembers && errors.maxMembers ? 'maxMembers-error' : undefined}
+            aria-describedby={
+              touched.maxMembers && errors.maxMembers ? 'maxMembers-error' : undefined
+            }
             required
           />
           {touched.maxMembers && errors.maxMembers && (
@@ -483,7 +497,9 @@ export const GroupCreationForm: React.FC<GroupCreationFormProps> = ({ onSuccess 
             </div>
             <div>
               <span className="text-gray-600">Invited:</span>
-              <p className="font-medium text-gray-900 mt-1">{formData.invitedMembers.length} members</p>
+              <p className="font-medium text-gray-900 mt-1">
+                {formData.invitedMembers.length} members
+              </p>
             </div>
           </div>
         </div>
