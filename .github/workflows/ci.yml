@@ -110,30 +110,22 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Rust
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@stable
         with:
-          profile: minimal
-          toolchain: stable
           target: wasm32-unknown-unknown
-          override: true
 
-      - name: Cache Cargo
-        uses: actions/cache@v3
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            contracts/ajo/target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          workspaces: "contracts/ajo -> target"
 
       - name: Install Stellar CLI
-        run: |
-          cargo install --locked stellar-cli --features opt || echo "stellar-cli already installed"
+        uses: stellar-actions/install-stellar-cli@v2
+        with:
+          version: '21.4.0'
 
       - name: Build Contract
-        run: cd contracts/ajo && stellar contract build
+        run: cd contracts/ajo && cargo build --target wasm32-unknown-unknown --release
 
       - name: Run Contract Tests
         run: cd contracts/ajo && cargo test
@@ -289,42 +281,6 @@ jobs:
               body: '🚀 Preview deployment ready! Configure your hosting provider for automatic preview deploys.'
             })
 
-  test:
-    name: Test
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
-
-      - name: Cache cargo registry
-        uses: actions/cache@v3
-        with:
-          path: ~/.cargo/registry
-          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Cache cargo index
-        uses: actions/cache@v3
-        with:
-          path: ~/.cargo/git
-          key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Cache cargo build
-        uses: actions/cache@v3
-        with:
-          path: target
-          key: ${{ runner.os }}-cargo-test-target-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Run contract tests
-        run: |
-          cd contracts/ajo
-          cargo test --verbose
 
   # Job 7: Frontend & Backend Tests with Coverage
   tests-js:
@@ -373,17 +329,18 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
         with:
-          profile: minimal
-          toolchain: stable
-          override: true
+          workspaces: "contracts/ajo -> target"
 
       - name: Install cargo-audit
-        run: cargo install cargo-audit
+        run: cargo install cargo-audit || echo "cargo-audit already installed"
 
       - name: Run security audit
         run: |
