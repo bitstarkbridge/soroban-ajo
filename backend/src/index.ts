@@ -68,6 +68,10 @@ app.use(errorHandler)
 initializeQueues()
 startJobProcessors()
 
+// Start blockchain event listener
+import { blockchainListener } from './services/blockchainListener'
+blockchainListener.start()
+
 // Start server
 app.listen(PORT, () => {
   logger.info(`Server started on port ${PORT}`, { env: process.env.NODE_ENV || 'development' })
@@ -87,6 +91,7 @@ const shutdown = async () => {
     })
   }
 
+  blockchainListener.stop()
   stopScheduler()
   await stopWorkers()
   setTimeout(() => process.exit(0), 100)
