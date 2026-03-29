@@ -45,10 +45,10 @@ const setupInterceptors = () => {
   // Error interceptor: Handle Soroban-specific errors
   interceptorManager.addErrorInterceptor((error) => {
     if (error.config.url?.includes('soroban') || error.config.url?.includes('stellar')) {
-      analytics.trackError(error as Error, { 
-        operation: 'soroban_http', 
-        url: error.config.url, 
-        method: error.config.method 
+      analytics.trackError(error as Error, {
+        operation: 'soroban_http',
+        url: error.config.url,
+        method: error.config.method
       }, 'medium')
     }
     throw error
@@ -864,8 +864,8 @@ export const initializeSoroban = (): SorobanService => {
                   return {
                     groupId,
                     currentCycle: Number(rawStatus.current_cycle),
-                    nextRecipient: rawStatus.has_next_recipient 
-                      ? String(rawStatus.next_recipient) 
+                    nextRecipient: rawStatus.has_next_recipient
+                      ? String(rawStatus.next_recipient)
                       : 'N/A',
                     pendingContributions,
                     totalCollected,
@@ -1081,7 +1081,7 @@ export const initializeSoroban = (): SorobanService => {
               return await withRetry(
                 async () => {
 
-                    if (isTestEnvironment || !CONTRACT_ID) {
+                  if (isTestEnvironment || !CONTRACT_ID) {
                     // ── Mock data so the UI works during development ──────────
                     // Remove this block once the contract is deployed and
                     // CONTRACT_ID is set in your .env file.
@@ -1911,7 +1911,7 @@ export const initializeSoroban = (): SorobanService => {
         try {
           // Import the transaction batcher
           const { TransactionBatcher, createScVal } = await import('../utils/transactionBatcher')
-          
+
           if (!(await isConnected())) {
             throw new Error("Freighter wallet is not installed.")
           }
@@ -1958,10 +1958,10 @@ export const initializeSoroban = (): SorobanService => {
               gasUsed: result.gasUsed,
               simulateOnly: options.simulateOnly || false,
             })
-            
+
             if (!options.simulateOnly) {
               showNotification.success(`Batch executed successfully! ${result.results.filter(r => r.success).length}/${result.results.length} operations completed.`)
-              
+
               // Invalidate relevant caches
               cacheService.invalidateByTag(CacheTags.groups)
             }
@@ -1984,7 +1984,7 @@ export const initializeSoroban = (): SorobanService => {
         try {
           // Import the transaction batcher
           const { TransactionBatcher, createScVal } = await import('../utils/transactionBatcher')
-          
+
           if (!(await isConnected())) {
             throw new Error("Freighter wallet is not installed.")
           }
@@ -2019,7 +2019,7 @@ export const initializeSoroban = (): SorobanService => {
 
           // Estimate gas
           const estimate = await batcher.estimateBatchGas(batchOperations, sourceAccount)
-          
+
           return estimate
         } catch (error) {
           const { severity } = classifyError(error)
@@ -2179,7 +2179,7 @@ export async function simulateSorobanTransaction(
     const transaction = StellarSdk.TransactionBuilder.fromXDR(
       builtTxXdr,
       process.env.NEXT_PUBLIC_SOROBAN_NETWORK_PASSPHRASE ||
-        'Test SDF Network ; September 2015'
+      'Test SDF Network ; September 2015'
     ) as StellarSdk.Transaction
 
     // Use the existing `server` (SorobanRpc.Server) declared at the top of soroban.ts
@@ -2297,7 +2297,7 @@ export async function fundWithFriendbot(publicKey: string): Promise<boolean> {
 /**
  * Return the "Add Funds" URL:
  * - Testnet → Friendbot page
- * - Mainnet → StellarX exchange
+ * - Mainnet → External exchange page
  * 
  * @param publicKey - Stellar public key
  * @returns URL string
@@ -2306,3 +2306,271 @@ export function getAddFundsUrl(publicKey: string): string {
   return IS_TESTNET
     ? `https://friendbot.stellar.org?addr=${encodeURIComponent(publicKey)}`
     : 'https://stellarx.com/markets/XLM'
+}
+
+// ── Penalty Management ───────────────────────────────────────────────────────
+
+/**
+ * Get penalty record for a specific member in a group
+ * 
+ * @param groupId - The group ID
+ * @param member - The member's address
+ * @param useCache - Whether to use cached data
+ * @returns Member penalty record
+ */
+export async function getMemberPenaltyRecord(
+  groupId: string,
+  member: string,
+  useCache: boolean = true
+): Promise<MemberPenaltyRecord> {
+  const cacheKey = `member_penalty_record_${groupId}_${member}`
+
+  if (useCache) {
+    const cached = cacheService.get(cacheKey)
+    if (cached) {
+      return cached
+    }
+  }
+
+  try {
+    const contract = new SorobanClient.Contract(contractId)
+    const account = new SorobanClient.Address(member)
+
+    const result = await contract.call(
+      'get_member_penalty_record',
+      new SorobanClient.Address(member),
+      new SorobanClient.U64(BigInt(groupId))
+    )
+
+    const record = result.val.toXDR('base64')
+
+    // Parse the XDR result - this would need proper XDR parsing
+    // For now, returning a mock structure that matches the contract
+    const penaltyRecord: MemberPenaltyRecord = {
+      member,
+      groupId,
+      lateCount: 0, // Extract from XDR
+      onTimeCount: 0, // Extract from XDR
+      totalPenalties: 0, // Extract from XDR
+      reliabilityScore: 100, // Extract from XDR
+    }
+
+    if (useCache) {
+      cacheService.set(cacheKey, penaltyRecord, 60 * 1000) // 1 minute cache
+    }
+
+    return penaltyRecord
+  } catch (error) {
+    console.error('Failed to get member penalty record:', error)
+    throw error
+  }
+}
+
+/**
+ * Get aggregated penalty statistics for a group
+ * 
+ * @param groupId - The group ID
+ * @param useCache - Whether to use cached data
+ * @returns Group penalty statistics
+ */
+export async function getGroupPenaltyStats(
+  groupId: string,
+  useCache: boolean = true
+): Promise<PenaltyStats> {
+  const cacheKey = `group_penalty_stats_${groupId}`
+
+  if (useCache) {
+    const cached = cacheService.get(cacheKey)
+    if (cached) {
+      return cached
+    }
+  }
+
+  try {
+    // Get all members first
+    const members = await getGroupMembers(groupId, useCache)
+
+    if (!members || members.length === 0) {
+      const emptyStats: PenaltyStats = {
+        totalPenalties: 0,
+        averageReliabilityScore: 100,
+        totalLateContributions: 0,
+        totalOnTimeContributions: 0,
+        membersWithPenalties: 0,
+        totalMembers: 0,
+      }
+
+      if (useCache) {
+        cacheService.set(cacheKey, emptyStats, 60 * 1000)
+      }
+
+      return emptyStats
+    }
+
+    // Get penalty records for all members
+    const penaltyPromises = members.map(member =>
+      getMemberPenaltyRecord(groupId, member.address, useCache)
+    )
+
+    const penaltyRecords = await Promise.all(penaltyPromises)
+
+    // Calculate aggregate statistics
+    const stats: PenaltyStats = {
+      totalPenalties: penaltyRecords.reduce((sum, record) => sum + record.totalPenalties, 0),
+      averageReliabilityScore: penaltyRecords.reduce((sum, record) => sum + record.reliabilityScore, 0) / penaltyRecords.length,
+      totalLateContributions: penaltyRecords.reduce((sum, record) => sum + record.lateCount, 0),
+      totalOnTimeContributions: penaltyRecords.reduce((sum, record) => sum + record.onTimeCount, 0),
+      membersWithPenalties: penaltyRecords.filter(record => record.totalPenalties > 0).length,
+      totalMembers: penaltyRecords.length,
+    }
+
+    if (useCache) {
+      cacheService.set(cacheKey, stats, 60 * 1000)
+    }
+
+    return stats
+  } catch (error) {
+    console.error('Failed to get group penalty stats:', error)
+    throw error
+  }
+}
+
+/**
+ * Get penalty history for a group or specific member
+ * 
+ * @param groupId - The group ID
+ * @param member - Optional member address to filter by
+ * @param limit - Maximum number of records to return
+ * @param useCache - Whether to use cached data
+ * @returns Array of penalty history items
+ */
+export async function getPenaltyHistory(
+  groupId: string,
+  member?: string,
+  limit: number = 50,
+  useCache: boolean = true
+): Promise<PenaltyHistoryItem[]> {
+  const cacheKey = `penalty_history_${groupId}_${member || 'all'}_${limit}`
+
+  if (useCache) {
+    const cached = cacheService.get(cacheKey)
+    if (cached) {
+      return cached
+    }
+  }
+
+  try {
+    // This would need to be implemented in the smart contract
+    // For now, returning mock data
+    const mockHistory: PenaltyHistoryItem[] = [
+      {
+        id: '1',
+        groupId,
+        member: member || 'GBX4Q7...',
+        cycle: 1,
+        penaltyAmount: 10,
+        isLate: true,
+        timestamp: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+        reason: 'Late contribution'
+      },
+      {
+        id: '2',
+        groupId,
+        member: member || 'GBX4Q7...',
+        cycle: 2,
+        penaltyAmount: 0,
+        isLate: false,
+        timestamp: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(),
+        reason: 'On-time contribution'
+      }
+    ]
+
+    if (useCache) {
+      cacheService.set(cacheKey, mockHistory, 2 * 60 * 1000) // 2 minute cache
+    }
+
+    return mockHistory.slice(0, limit)
+  } catch (error) {
+    console.error('Failed to get penalty history:', error)
+    throw error
+  }
+}
+
+/**
+ * Get all penalty records for a user across all groups
+ * 
+ * @param userId - The user's address
+ * @param useCache - Whether to use cached data
+ * @returns Array of member penalty records
+ */
+export async function getUserPenaltyRecords(
+  userId: string,
+  useCache: boolean = true
+): Promise<MemberPenaltyRecord[]> {
+  const cacheKey = `user_penalty_records_${userId}`
+
+  if (useCache) {
+    const cached = cacheService.get(cacheKey)
+    if (cached) {
+      return cached
+    }
+  }
+
+  try {
+    // Get all groups the user is a member of
+    const userGroups = await getUserGroups(userId, useCache)
+
+    if (!userGroups || userGroups.length === 0) {
+      return []
+    }
+
+    // Get penalty records for each group
+    const penaltyPromises = userGroups.map(group =>
+      getMemberPenaltyRecord(group.id, userId, useCache)
+    )
+
+    const penaltyRecords = await Promise.all(penaltyPromises)
+
+    if (useCache) {
+      cacheService.set(cacheKey, penaltyRecords, 5 * 60 * 1000) // 5 minute cache
+    }
+
+    return penaltyRecords
+  } catch (error) {
+    console.error('Failed to get user penalty records:', error)
+    throw error
+  }
+}
+
+/**
+ * Invalidate penalty-related cache for a group
+ * 
+ * @param groupId - The group ID
+ */
+export function invalidateGroupPenaltyCache(groupId: string): void {
+  const patterns = [
+    `member_penalty_record_${groupId}_`,
+    `group_penalty_stats_${groupId}`,
+    `penalty_history_${groupId}_`
+  ]
+
+  patterns.forEach(pattern => {
+    cacheService.invalidateByPattern(pattern)
+  })
+}
+
+/**
+ * Invalidate all penalty-related cache
+ */
+export function invalidateAllPenaltyCache(): void {
+  const patterns = [
+    'member_penalty_record_',
+    'group_penalty_stats_',
+    'penalty_history_',
+    'user_penalty_records_'
+  ]
+
+  patterns.forEach(pattern => {
+    cacheService.invalidateByPattern(pattern)
+  })
+}

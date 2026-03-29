@@ -9,3 +9,20 @@ export { useTransactionHistory } from './useTransactionHistory'
 export type { TxRow, TxFilters, TxSort, PageSizeOption } from './useTransactionHistory'
 export { useGroupAnalytics } from './useGroupAnalytics'
 export type { AnalyticsSummary, ContributionTrend, MemberStat, GroupPerformance, TopContributor } from './useGroupAnalytics'
+
+// Penalty hooks
+export {
+    useMemberPenaltyRecord,
+    useGroupPenaltyStats,
+    usePenaltyHistory,
+    useUserPenaltyRecords,
+    usePenaltyCacheInvalidation,
+    usePenaltyPrefetch,
+    getReliabilityScoreColor,
+    getReliabilityScoreLabel
+} from './usePenaltyStats'
+export type {
+    MemberPenaltyRecord,
+    PenaltyStats,
+    PenaltyHistoryItem
+} from '../types'

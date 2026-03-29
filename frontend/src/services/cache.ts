@@ -521,6 +521,11 @@ export const CacheKeys = {
   userGroups: (userId: string) => `user:${userId}:groups`,
   transactions: (groupId: string, cursor?: string, limit?: number) => `group:${groupId}:transactions:${cursor || 'start'}:${limit || 10}`,
   userTransactions: (userId: string) => `user:${userId}:transactions`,
+  // Penalty-related cache keys
+  memberPenaltyRecord: (groupId: string, member: string) => `penalty:${groupId}:member:${member}`,
+  groupPenaltyStats: (groupId: string) => `penalty:${groupId}:stats`,
+  penaltyHistory: (groupId: string, member?: string) => `penalty:${groupId}:history:${member || 'all'}`,
+  userPenaltyRecords: (userId: string) => `penalty:user:${userId}:records`,
 }
 
 /**
@@ -531,4 +536,6 @@ export const CacheTags = {
   group: (groupId: string) => `group:${groupId}`,
   user: (userId: string) => `user:${userId}`,
   transactions: 'transactions',
+  penalties: 'penalties',
+  penalty: (groupId: string) => `penalty:${groupId}`,
 }
