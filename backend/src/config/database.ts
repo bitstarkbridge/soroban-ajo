@@ -27,3 +27,26 @@ pool.on('error', (err) => {
   console.error('Unexpected pg pool error', err)
 })
 
+// Read replicas configuration
+const readReplicaUrls = (process.env.READ_REPLICA_URLS || '').split(',').filter(Boolean)
+
+const readReplicaPools = readReplicaUrls.map((url) => {
+  const replicaConfig: PoolConfig = {
+    connectionString: url.trim(),
+    max: parseInt(process.env.READ_REPLICA_POOL_MAX ?? '20'),
+    min: parseInt(process.env.READ_REPLICA_POOL_MIN ?? '5'),
+    idleTimeoutMillis: parseInt(process.env.READ_REPLICA_IDLE_TIMEOUT ?? '30000'),
+    connectionTimeoutMillis: parseInt(process.env.READ_REPLICA_CONNECTION_TIMEOUT ?? '5000'),
+    allowExitOnIdle: process.env.NODE_ENV !== 'production',
+  }
+  return new Pool(replicaConfig)
+})
+
+readReplicaPools.forEach((replicaPool) => {
+  replicaPool.on('error', (err) => {
+    console.error('Unexpected read replica pool error', err)
+  })
+})
+
+export { readReplicaPools }
+
